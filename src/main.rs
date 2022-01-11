@@ -3,11 +3,16 @@
 // Tune into chit-chat between computers of the Bitcoin P2P network 🧘
 //
 //
+
+// Modules:
 mod seeds;
 mod net;
+mod netmsg;
 use net::*;
 
 fn main() {
+    // Currently, running the program will simply try and connect to the minimum specified
+    // number of peers.
     let args = ApplicationArgs::from(std::env::args());
 
     let peers = Peer::get(args.min_peers);
@@ -18,7 +23,7 @@ fn main() {
 
 #[derive(Debug)]
 struct ApplicationArgs {
-    min_peers: usize
+    min_peers: usize  // Argument to specify the minimum number of peers to initially discover.
 }
 
 impl From<std::env::Args> for ApplicationArgs {
