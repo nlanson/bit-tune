@@ -4,10 +4,12 @@
 //
 //
 
-// Modules:
+// Modules
 mod seeds;
 mod net;
 mod netmsg;
+mod encode;
+
 use net::*;
 
 fn main() {

@@ -60,11 +60,4 @@ pub enum Command {
 
 // Variable length integer structure
 #[derive(Debug, Clone)]
-pub struct VariableInteger(u64);
-
-
-pub trait Serialise {
-    /// Encodes self into a format acceptable by the Bitcoin P2P network.
-    fn consensus_serialise<W>(&self, &mut buf: W) -> usize
-    where W: std::io::Write;
-}
+pub struct VariableInteger(pub u64);
