@@ -1,8 +1,13 @@
-// bit-tune crate
+// Bit tune radio
 //
 // Tune into chit-chat between computers of the Bitcoin P2P network 🧘
 //
 //
+// General todos:
+//  - Get simple message creation and transmission working.
+//    The version message will be good for this.
+//
+//  - Decode incoming messages.
 
 // Modules
 mod seeds;

@@ -4,7 +4,11 @@
 //
 
 use crate::{
-    netmsg::VariableInteger
+    netmsg::{
+        VariableInteger,
+        Magic,
+        Command
+    }
 };
 
 /// Trait to encode self into a format acceptable by the Bitcoin P2P network.
@@ -57,6 +61,24 @@ impl Encode for VariableInteger {
     }
 }
 
+impl Encode for Magic {
+    fn net_encode<W>(&self, w: W) -> usize
+    where W: std::io::Write {
+        self.bytes().net_encode(w)
+    }
+}
+
+impl Encode for Command {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        let mut buf: [u8; 12] = [0; 12];
+        let cmd_str = self.to_str().as_bytes();
+        buf[..cmd_str.len()].copy_from_slice(&cmd_str);
+        w.write(&buf).expect("Failed to write")
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -67,7 +89,19 @@ mod tests {
         let lens: [usize; 9] = [1, 1, 3, 3, 3, 5, 5, 5, 9];
 
         for i in 0..ints.len() {
-            assert_eq!(VariableInteger(ints[i]).net_encode(Vec::new()), lens[i])
+            assert_eq!(VariableInteger::from(ints[i]).net_encode(Vec::new()), lens[i])
         }
+    }
+
+    #[test]
+    fn network_magic() {
+        let mut main: Vec<u8> = Vec::new();
+        let mut test: Vec<u8> = Vec::new();
+
+        Magic::Main.net_encode(&mut main);
+        Magic::Test.net_encode(&mut test);
+
+        assert_eq!(main, [0xF9, 0xBE, 0xB4, 0xD9]);
+        assert_eq!(test, [0xFA, 0xBF, 0xB5, 0xDA]);
     }
 }
