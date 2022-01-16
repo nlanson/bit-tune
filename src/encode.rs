@@ -5,11 +5,14 @@
 
 use crate::{
     netmsg::{
+        Message,
+        MessagePayload
+    },
+    netmsgheader::{
         VariableInteger,
         Magic,
         Command,
-        MessageHeader,
-        Message
+        MessageHeader
     }
 };
 
@@ -34,6 +37,7 @@ integer_le_encode!(u8);
 integer_le_encode!(u16);
 integer_le_encode!(u32);
 integer_le_encode!(u64);
+integer_le_encode!(usize);
 
 /// Macro to encode arrays
 macro_rules! array_encode {
@@ -109,8 +113,16 @@ impl Encode for Message {
     where W: std::io::Write {
         let mut wrtlen: usize = 0;
         wrtlen += self.header.net_encode(&mut w);
-        wrtlen += w.write(&self.payload).expect("Failed to write");
+        // wrtlen += w.write(&self.payload).expect("Failed to write");
         wrtlen
+    }
+}
+
+impl Encode for String {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        self.len().net_encode(&mut w) +
+        w.write(self.as_bytes()).expect("Failed to write")
     }
 }
 
