@@ -6,13 +6,15 @@
 // General todos:
 //  - Get simple message creation and transmission working.
 //    The version message will be good for this.
-//
 //  - Decode incoming messages.
+//
+
 
 // Modules
 mod seeds;
 mod net;
 mod netmsg;
+mod netmsgheader;
 mod encode;
 
 use net::*;
