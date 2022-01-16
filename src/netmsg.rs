@@ -30,7 +30,11 @@
 //        structures for modular encoding/decoding of network messages.
 //      - Message payloads will not be deserialized for unsupported network messages
 
-use std::convert::TryInto;
+use crate::netmsgheader::{
+    MessageHeader,
+    Magic,
+    Command
+};
 use sha2::{Sha256, Digest};
 
 
@@ -38,92 +42,105 @@ use sha2::{Sha256, Digest};
 #[derive(Debug, Clone)]
 pub struct Message {
     pub header: MessageHeader,
-    pub payload: Vec<u8>
-}
-
-/// Message header structure
-#[derive(Debug, Clone)]
-pub struct MessageHeader {
-    pub magic: Magic,
-    pub command: Command,
-    pub length: VariableInteger,
-    pub checksum: [u8; 4]
+    pub payload: MessagePayload
 }
 
 impl Message {
-    pub fn new(payload: Vec<u8>, magic: Magic, command: Command) -> Message {
-        let mut hasher = Sha256::new();
-        hasher.update(&payload);
-
+    pub fn new(payload: MessagePayload, magic: Magic, command: Command) -> Message {
         Self {
-            header: MessageHeader::new(magic, command, payload.len(), &hasher.finalize()),
+            header: MessageHeader::new(magic, command, payload.len(), payload.hash()),
             payload
         }
     }
 }
 
-impl MessageHeader {
-    fn new(magic: Magic, command: Command, pylen: usize, sum: &[u8]) -> MessageHeader {
-        Self {
-            magic,
-            command,
-            length: VariableInteger::from(pylen),
-            checksum: sum[..4].try_into().expect("Failed to create sum")
-        }
-    }
-}
-
-/// Network magic enum
+/// Enum that contians the data structures for network messages
 #[derive(Debug, Clone)]
-pub enum Magic {
-    Main,
-    Test
+pub enum MessagePayload {
+    Version(VersionMessage),
+    Verack
 }
 
-impl Magic {
-    /// Return the magic bytes for the specified network.
-    pub fn bytes(&self) -> u32 {
-        match self {
-            Magic::Main => 0xD9B4BEF9,
-            Magic::Test => 0xDAB5BFFA
+impl MessagePayload {
+    /// Get the length of the encoded payload
+    pub fn len(&self) -> usize {
+        todo!();
+    }
+
+    /// Hash the payload to create the checksum
+    pub fn hash(&self) -> [u8; 4] {
+        todo!();
+    }
+}
+
+
+#[derive(Debug, Clone)]
+pub struct VersionMessage {
+    version: u32,
+    services: NodeServiceFlags,
+    timestamp: u64,
+    // Todo: Network address structs for the following fields
+    // https://en.bitcoin.it/wiki/Protocol_documentation#Network_address
+    //
+    // addr_recv: NetworkAddress,
+    // addr_sent: NetworkAddress
+    nonce: u64,
+    agent: String,
+    start_height: u32,
+    relay: bool
+}
+
+impl VersionMessage {
+    pub fn new(
+        version: u32,
+        services: NodeServiceFlags,
+        timestamp: u64,
+        // addr_recv: NetworkAddress,
+        // addr_sent: NetworkAddress,
+        nonce: u64,
+        agent: String,
+        start_height: u32,
+        relay: bool
+    ) -> VersionMessage {
+        Self {
+            version,
+            services,
+            timestamp,
+            // addr_recv,
+            // addr_sent,
+            nonce,
+            agent,
+            start_height,
+            relay
         }
     }
 }
 
-/// Network command enum
+
+/// Node services flag to indicate what services are available on a node.
+/// Todo: Multiflag support
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub enum Command {
-    Version,
-    Verack,
-    //More to come...
+pub enum NodeServiceFlags {
+    None,
+    Network,
+    GetUTXO,
+    Bloom,
+    Witness,
+    CompactFilters,
+    NetworkLimited
 }
 
-impl Command {
-    pub fn to_str(&self) -> &str {
+impl NodeServiceFlags {
+    pub fn value(&self) -> u64 {
         match self {
-            Self::Version => "version",
-            Self::Verack =>  "verack"
+            Self::None => 0,                // No services available
+            Self::Network => 1,             // Full chain history available
+            Self::GetUTXO => 2,             // Can be queried for UTXOs
+            Self::Bloom => 4,               // Capable of handling bloom filtered connections
+            Self::Witness => 8,             // Witness data available
+            Self::CompactFilters => 64,     // Can serve basic block filte requests
+            Self::NetworkLimited => 1024    // Can serve blocks from the last 2 days
         }
     }
 }
-
-// Variable length integer structure
-#[derive(Debug, Clone)]
-pub struct VariableInteger(pub u64);
-
-macro_rules! varint_from {
-    ($int: ty) => {
-        impl From<$int> for VariableInteger {
-            fn from(int: $int) -> VariableInteger {
-                VariableInteger(int as u64)
-            }
-        }
-    };
-}
-
-varint_from!(u8);
-varint_from!(u16);
-varint_from!(u32);
-varint_from!(u64);
-varint_from!(usize);
