@@ -7,7 +7,9 @@ use crate::{
     netmsg::{
         VariableInteger,
         Magic,
-        Command
+        Command,
+        MessageHeader,
+        Message
     }
 };
 
@@ -17,6 +19,7 @@ pub trait Encode {
     where W: std::io::Write;
 }
 
+/// Macro to encode integers in little endian.
 macro_rules! integer_le_encode {
     ($int: ty) => {
         impl Encode for $int {
@@ -27,12 +30,23 @@ macro_rules! integer_le_encode {
         }
     };
 }
-
-// Most integers are encoded as little endian
 integer_le_encode!(u8);
 integer_le_encode!(u16);
 integer_le_encode!(u32);
 integer_le_encode!(u64);
+
+/// Macro to encode arrays
+macro_rules! array_encode {
+    ($len: expr) => {
+        impl Encode for [u8; $len] {
+            fn net_encode<W>(&self, mut w: W) -> usize
+            where W: std::io::Write {
+                w.write(self).expect("Failed to write")
+            }
+        }
+    };
+}
+array_encode!(4);
 
 
 impl Encode for VariableInteger {
@@ -77,6 +91,29 @@ impl Encode for Command {
         w.write(&buf).expect("Failed to write")
     }
 }
+
+impl Encode for MessageHeader {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        let mut wrtlen: usize = 0;
+        wrtlen += self.magic.net_encode(&mut w);
+        wrtlen += self.command.net_encode(&mut w);
+        wrtlen += self.length.net_encode(&mut w);
+        wrtlen += self.checksum.net_encode(&mut w);
+        wrtlen
+    }
+}
+
+impl Encode for Message {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        let mut wrtlen: usize = 0;
+        wrtlen += self.header.net_encode(&mut w);
+        wrtlen += w.write(&self.payload).expect("Failed to write");
+        wrtlen
+    }
+}
+
 
 
 #[cfg(test)]

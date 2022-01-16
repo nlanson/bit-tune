@@ -30,23 +30,50 @@
 //        structures for modular encoding/decoding of network messages.
 //      - Message payloads will not be deserialized for unsupported network messages
 
-// Network message structure
+use std::convert::TryInto;
+use sha2::{Sha256, Digest};
+
+
+/// Network message structure
 #[derive(Debug, Clone)]
 pub struct Message {
-    header: MessageHeader,
-    payload: Vec<u8>
+    pub header: MessageHeader,
+    pub payload: Vec<u8>
 }
 
-// Message header structure
+/// Message header structure
 #[derive(Debug, Clone)]
 pub struct MessageHeader {
-    magic: Magic,
-    command: Command,
-    length: u32,
-    checksum: u32
+    pub magic: Magic,
+    pub command: Command,
+    pub length: VariableInteger,
+    pub checksum: [u8; 4]
 }
 
-// Network magic enum
+impl Message {
+    pub fn new(payload: Vec<u8>, magic: Magic, command: Command) -> Message {
+        let mut hasher = Sha256::new();
+        hasher.update(&payload);
+
+        Self {
+            header: MessageHeader::new(magic, command, payload.len(), &hasher.finalize()),
+            payload
+        }
+    }
+}
+
+impl MessageHeader {
+    fn new(magic: Magic, command: Command, pylen: usize, sum: &[u8]) -> MessageHeader {
+        Self {
+            magic,
+            command,
+            length: VariableInteger::from(pylen),
+            checksum: sum[..4].try_into().expect("Failed to create sum")
+        }
+    }
+}
+
+/// Network magic enum
 #[derive(Debug, Clone)]
 pub enum Magic {
     Main,
@@ -63,7 +90,7 @@ impl Magic {
     }
 }
 
-// Network command enum
+/// Network command enum
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum Command {
@@ -76,7 +103,7 @@ impl Command {
     pub fn to_str(&self) -> &str {
         match self {
             Self::Version => "version",
-            Self::Verack => "verack"
+            Self::Verack =>  "verack"
         }
     }
 }
@@ -99,3 +126,4 @@ varint_from!(u8);
 varint_from!(u16);
 varint_from!(u32);
 varint_from!(u64);
+varint_from!(usize);
