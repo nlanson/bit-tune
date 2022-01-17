@@ -12,8 +12,8 @@ use std::net::{
 
 #[derive(Copy, Clone, Debug)]
 pub struct Peer {
-    addr: Ipv4Addr,
-    port: Port
+    pub addr: Ipv4Addr,
+    pub port: Port
 }
 pub type UntestedPeer = Peer; //Type alias for distinguishing between tested and untested peers.
 
@@ -22,7 +22,6 @@ impl From<[u8; 6]> for UntestedPeer {
         Self {
             addr: Ipv4Addr::from([seed[0], seed[1], seed[2], seed[3]]),
             port: Port::from([seed[4], seed[5]])
-            //((seed[4] as u16) << 8) | (seed[5] as u16)
         }
     }
 }

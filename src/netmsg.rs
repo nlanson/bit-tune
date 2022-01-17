@@ -38,7 +38,7 @@ use crate::{
     },
     net::Port
 };
-use std::net::Ipv4Addr;
+use std::{net::Ipv4Addr, collections::HashSet};
 use sha2::{Sha256, Digest};
 
 
@@ -82,22 +82,22 @@ impl MessagePayload {
 #[derive(Debug, Clone)]
 /// The message payload for version commands.
 pub struct VersionMessage {
-    version: u32,
-    services: NodeServiceFlags,
-    timestamp: u64,
-    addr_recv: NetAddr,
-    addr_sent: NetAddr,
-    nonce: u64,
-    agent: String,
-    start_height: u32,
-    relay: bool
+    pub version: u32,
+    pub services: ServicesList,
+    pub timestamp: std::time::SystemTime,
+    pub addr_recv: NetAddr,
+    pub addr_sent: NetAddr,
+    pub nonce: u64,
+    pub agent: String,
+    pub start_height: u32,
+    pub relay: bool
 }
 
 impl VersionMessage {
     pub fn new(
         version: u32,
-        services: NodeServiceFlags,
-        timestamp: u64,
+        services: ServicesList,
+        timestamp: std::time::SystemTime,
         addr_recv: NetAddr,
         addr_sent: NetAddr,
         nonce: u64,
@@ -121,11 +121,11 @@ impl VersionMessage {
 
 
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Eq, Hash, PartialEq, Copy, Clone, Debug)]
 #[allow(dead_code)]
 /// Node services flag to indicate what services are available on a node.
 /// Todo: Multiflag support
-pub enum NodeServiceFlags {
+pub enum Services {
     None,
     Network,
     GetUTXO,
@@ -135,7 +135,7 @@ pub enum NodeServiceFlags {
     NetworkLimited
 }
 
-impl NodeServiceFlags {
+impl Services {
     pub fn value(&self) -> u64 {
         match self {
             // Each service is a bit flag
@@ -150,24 +150,53 @@ impl NodeServiceFlags {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
+/// A list of service flags in a hash set.
+/// DOES NOT ENFORCE CONFLICTING FLAGS
+pub struct ServicesList(std::collections::HashSet<Services>);
+
+impl ServicesList {
+    pub fn new() -> Self {
+        ServicesList(HashSet::new())
+    }
+
+    pub fn add_flag(&mut self, flag: Services) {
+        self.0.insert(flag);
+    }
+
+    pub fn get_flags(&self) -> Vec<Services> {
+        self.0.iter().map(|flag| *flag).collect()
+    }
+}
+
+impl Default for ServicesList {
+    fn default() -> Self {
+        let mut flags = Self::new();
+        flags.add_flag(Services::None);
+        flags
+    }
+}
+
+
+
+#[derive(Clone, Debug)]
 /// When a network address is needed somewhere, this structure is used.
 pub struct NetAddr {
-    services: NodeServiceFlags,
-    ip: Ipv4Addr,
-    port: Port
+    pub services: ServicesList,
+    pub ip: Ipv4Addr,
+    pub port: Port,
 }
 
 impl NetAddr {
     pub fn new(
-        services: NodeServiceFlags,
+        services: ServicesList,
         ip: Ipv4Addr,
-        port: u16
+        port: Port
     ) -> Self {
         Self {
             services,
             ip: ip,
-            port: Port::from(port) 
+            port: port
         }
     }
 }
@@ -175,7 +204,7 @@ impl NetAddr {
 impl Default for NetAddr {
     fn default() -> NetAddr {
         Self {
-            services: NodeServiceFlags::None,
+            services: ServicesList::new(),
             ip: Ipv4Addr::new(0, 0, 0, 0),
             port: Port::from(0)
         }
@@ -185,7 +214,7 @@ impl Default for NetAddr {
 impl From<(Ipv4Addr, Port)> for NetAddr {
     fn from(net_info: (Ipv4Addr, Port)) -> NetAddr {
         Self {
-            services: NodeServiceFlags::None,
+            services: ServicesList::new(),
             ip: net_info.0,
             port: net_info.1
         }

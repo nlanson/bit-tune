@@ -8,6 +8,10 @@
 //    The version message will be good for this.
 //  - Decode incoming messages.
 //
+//  Immediate todos:
+//  - Payload hashing for message header checksum
+//  - Convinience function for creating messages that will be used
+//  - TCP Streams
 
 
 // Modules
@@ -18,15 +22,51 @@ mod netmsgheader;
 mod encode;
 
 use net::*;
+use netmsg::{
+    VersionMessage,
+    NetAddr,
+    ServicesList,
+    Services
+};
+
+use crate::encode::Encode;
 
 fn main() {
     // Currently, running the program will simply try and connect to the minimum specified
-    // number of peers.
+    // number of peers, and then spit out a version message to be sent out to the first peer.
     let args = ApplicationArgs::from(std::env::args());
 
     let peers = Peer::get(args.min_peers);
         
-    println!("{}", peers.len());
+    println!("Got {} peers...", peers.len());
+
+    // Create version message payload (No headers yet...)
+    let version = 70015; // Current protocol version
+    let mut services = ServicesList::new(); 
+    services.add_flag(Services::None); // No services
+    let timestamp = std::time::SystemTime::now(); // Current time
+    let addr_recv = NetAddr::new(services.clone(), peers[0].addr, peers[0].port); // Receiving address. Services should not be none
+    let addr_sent = NetAddr::default(); // Sending address (our local IP)
+    let nonce = 16735069437859780935u64; // Random nonce (Should use RNG)
+    let agent = String::from("cmdline:1"); // Agent (Can be anything really)
+    let start_height = 0u32; // Start height
+    let relay = false; // Relay
+
+    let version_message = VersionMessage::new(
+        version, 
+        services, 
+        timestamp, 
+        addr_recv, 
+        addr_sent,
+        nonce, 
+        agent, 
+        start_height,
+        relay
+    );
+
+    let mut msg = Vec::new();
+    version_message.net_encode(&mut msg);
+    println!("{:02x?}", msg);
 }
 
 

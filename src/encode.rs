@@ -3,10 +3,15 @@
 // Module implementing the encoding/decoding of encodable structures
 //
 
+use std::net::Ipv4Addr;
+
 use crate::{
     netmsg::{
         Message,
-        MessagePayload
+        // MessagePayload,
+        NetAddr,
+        ServicesList,
+        VersionMessage
     },
     netmsgheader::{
         VariableInteger,
@@ -122,7 +127,7 @@ impl Encode for Message {
 impl Encode for String {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
-        self.len().net_encode(&mut w) +
+        VariableInteger::from(self.len()).net_encode(&mut w) +
         w.write(self.as_bytes()).expect("Failed to write")
     }
 }
@@ -134,11 +139,73 @@ impl Encode for Port {
     }
 }
 
+impl Encode for Ipv4Addr {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        // Ipv4 addresses are encoded as an Ipv4 mapped Ipv6 address.
+        w.write(&self.to_ipv6_mapped().octets()).expect("Failed to write")
+    }
+}
+
+impl Encode for ServicesList {
+    fn net_encode<W>(&self, w: W) -> usize
+    where W: std::io::Write {
+        // Collect all the service flags and XOR them up
+        let flag: u64 = 
+        self
+            .get_flags()
+            .iter()
+            .fold(
+                0,
+                |acc, num| 
+                acc ^ num.value()
+            );
+
+        flag.net_encode(w) //always 8 bytes
+    }
+}
+
+impl Encode for NetAddr {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        self.services.net_encode(&mut w) +
+        self.ip.net_encode(&mut w) +
+        self.port.net_encode(&mut w)
+    }
+}
+
+impl Encode for std::time::SystemTime {
+    fn net_encode<W>(&self, w: W) -> usize
+    where W: std::io::Write {
+        self
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .expect("Could not get unix time")
+            .as_secs()
+            .net_encode(w)
+    }
+}
+
+impl Encode for VersionMessage {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        self.version.net_encode(&mut w) +
+        self.services.net_encode(&mut w) +
+        self.timestamp.net_encode(&mut w) +
+        self.addr_recv.net_encode(&mut w) +
+        self.addr_sent.net_encode(&mut w) +
+        self.nonce.net_encode(&mut w) +
+        self.agent.net_encode(&mut w) +
+        self.start_height.net_encode(&mut w) +
+        (self.relay as u8).net_encode(&mut w)
+    }
+}
+
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::netmsg::Services;
 
     #[test]
     fn varint_test() {
@@ -160,5 +227,16 @@ mod tests {
 
         assert_eq!(main, [0xF9, 0xBE, 0xB4, 0xD9]);
         assert_eq!(test, [0xFA, 0xBF, 0xB5, 0xDA]);
+    }
+
+    #[test]
+    fn service_flags() {
+        let mut flags = ServicesList::new();
+        flags.add_flag(Services::Network);
+        
+        let mut encoded = Vec::new();
+        flags.net_encode(&mut encoded);
+        
+        assert_eq!(encoded, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
     }
 }
