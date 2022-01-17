@@ -6,18 +6,19 @@
 use std::net::Ipv4Addr;
 
 use crate::{
-    netmsg::{
-        Message,
-        // MessagePayload,
-        NetAddr,
-        ServicesList,
-        VersionMessage
-    },
-    netmsgheader::{
-        VariableInteger,
-        Magic,
-        Command,
-        MessageHeader
+    msg::{
+        data::Message,
+        network::{
+            NetAddr,
+            ServicesList,
+            VersionMessage
+        },
+        headers::{
+            VariableInteger,
+            Magic,
+            Command,
+            MessageHeader
+        }
     },
     net::{
         Port
@@ -205,7 +206,7 @@ impl Encode for VersionMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::netmsg::Services;
+    use crate::msg::network::Services;
 
     #[test]
     fn varint_test() {

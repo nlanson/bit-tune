@@ -1,4 +1,4 @@
-// netmsgheader.rs
+// headers.rs
 //
 // Module for network message headers
 //

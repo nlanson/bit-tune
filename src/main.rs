@@ -17,18 +17,17 @@
 // Modules
 mod seeds;
 mod net;
-mod netmsg;
-mod netmsgheader;
+mod msg;
 mod encode;
 
+
 use net::*;
-use netmsg::{
+use msg::network::{
     VersionMessage,
     NetAddr,
     ServicesList,
     Services
 };
-
 use crate::encode::Encode;
 
 fn main() {
