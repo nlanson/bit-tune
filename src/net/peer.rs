@@ -2,7 +2,7 @@
 //
 // Module involving networking code.
 //
-//
+
 use rayon::prelude::*;
 use crate::seeds::ipv4bitseeds;
 use std::net::{
@@ -14,38 +14,6 @@ use std::net::{
 pub struct Peer {
     pub addr: Ipv4Addr,
     pub port: Port
-}
-pub type UntestedPeer = Peer; //Type alias for distinguishing between tested and untested peers.
-
-impl From<[u8; 6]> for UntestedPeer {
-    fn from(seed: [u8; 6]) -> Self {
-        Self {
-            addr: Ipv4Addr::from([seed[0], seed[1], seed[2], seed[3]]),
-            port: Port::from([seed[4], seed[5]])
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-/// TCP/IP Port stored as big endian bytes
-pub struct Port(pub [u8; 2]);
-
-impl From<u16> for Port {
-    fn from(port: u16) -> Port {
-        Port(port.to_be_bytes())
-    }
-}
-
-impl From<[u8; 2]> for Port {
-    fn from(port: [u8; 2]) -> Port {
-        Port(port)
-    }
-}
-
-impl Port {
-    pub fn to_u16(&self) -> u16 {
-        ((self.0[0] as u16) << 8) | (self.0[1] as u16)
-    }
 }
 
 impl Peer {
@@ -93,5 +61,40 @@ impl Peer {
 
         println!("Failed to connect to {}", peer);
         false
+    }
+}
+
+/// Type alias for distinguishing between tested and untested peers.
+pub type UntestedPeer = Peer; 
+
+impl From<[u8; 6]> for UntestedPeer {
+    fn from(seed: [u8; 6]) -> Self {
+        Self {
+            addr: Ipv4Addr::from([seed[0], seed[1], seed[2], seed[3]]),
+            port: Port::from([seed[4], seed[5]])
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+/// TCP/IP Port stored as big endian bytes
+//  Hence the use of [u8; 2] instead of u16.
+pub struct Port(pub [u8; 2]);
+
+impl From<u16> for Port {
+    fn from(port: u16) -> Port {
+        Port(port.to_be_bytes())
+    }
+}
+
+impl From<[u8; 2]> for Port {
+    fn from(port: [u8; 2]) -> Port {
+        Port(port)
+    }
+}
+
+impl Port {
+    pub fn to_u16(&self) -> u16 {
+        ((self.0[0] as u16) << 8) | (self.0[1] as u16)
     }
 }

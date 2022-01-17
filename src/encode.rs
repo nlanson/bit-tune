@@ -20,7 +20,7 @@ use crate::{
             MessageHeader
         }
     },
-    net::{
+    net::peer::{
         Port
     }
 };

@@ -5,7 +5,7 @@
 //
 
 use crate::{
-    net::Port,
+    net::peer::Port,
 };
 use std::net::Ipv4Addr;
 use std::collections::HashSet;

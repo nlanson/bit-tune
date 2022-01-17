@@ -21,7 +21,7 @@ mod msg;
 mod encode;
 
 
-use net::*;
+use net::peer::*;
 use msg::network::{
     VersionMessage,
     NetAddr,
