@@ -13,6 +13,9 @@ use crate::{
         Magic,
         Command,
         MessageHeader
+    },
+    net::{
+        Port
     }
 };
 
@@ -51,6 +54,7 @@ macro_rules! array_encode {
     };
 }
 array_encode!(4);
+array_encode!(2);
 
 
 impl Encode for VariableInteger {
@@ -99,30 +103,34 @@ impl Encode for Command {
 impl Encode for MessageHeader {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
-        let mut wrtlen: usize = 0;
-        wrtlen += self.magic.net_encode(&mut w);
-        wrtlen += self.command.net_encode(&mut w);
-        wrtlen += self.length.net_encode(&mut w);
-        wrtlen += self.checksum.net_encode(&mut w);
-        wrtlen
+        self.magic.net_encode(&mut w) +
+        self.command.net_encode(&mut w) +
+        self.length.net_encode(&mut w) +
+        self.checksum.net_encode(&mut w)
     }
 }
 
 impl Encode for Message {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
-        let mut wrtlen: usize = 0;
-        wrtlen += self.header.net_encode(&mut w);
-        // wrtlen += w.write(&self.payload).expect("Failed to write");
-        wrtlen
+        self.header.net_encode(&mut w)
+        // + w.write(&self.payload).expect("Failed to write");
     }
 }
 
+/// Strings are encoded as var string which is the string bytes with a varint prefixed
 impl Encode for String {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
         self.len().net_encode(&mut w) +
         w.write(self.as_bytes()).expect("Failed to write")
+    }
+}
+
+impl Encode for Port {
+    fn net_encode<W>(&self, w: W) -> usize
+    where W: std::io::Write {
+        self.0.net_encode(w)
     }
 }
 

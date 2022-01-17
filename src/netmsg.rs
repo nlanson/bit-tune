@@ -30,16 +30,20 @@
 //        structures for modular encoding/decoding of network messages.
 //      - Message payloads will not be deserialized for unsupported network messages
 
-use crate::netmsgheader::{
-    MessageHeader,
-    Magic,
-    Command
+use crate::{
+    netmsgheader::{
+        MessageHeader,
+        Magic,
+        Command
+    },
+    net::Port
 };
+use std::net::Ipv4Addr;
 use sha2::{Sha256, Digest};
 
 
-/// Network message structure
 #[derive(Debug, Clone)]
+/// Network message structure
 pub struct Message {
     pub header: MessageHeader,
     pub payload: MessagePayload
@@ -54,8 +58,9 @@ impl Message {
     }
 }
 
-/// Enum that contians the data structures for network messages
+
 #[derive(Debug, Clone)]
+/// Enum that contians the data structures for network messages
 pub enum MessagePayload {
     Version(VersionMessage),
     Verack
@@ -75,15 +80,13 @@ impl MessagePayload {
 
 
 #[derive(Debug, Clone)]
+/// The message payload for version commands.
 pub struct VersionMessage {
     version: u32,
     services: NodeServiceFlags,
     timestamp: u64,
-    // Todo: Network address structs for the following fields
-    // https://en.bitcoin.it/wiki/Protocol_documentation#Network_address
-    //
-    // addr_recv: NetworkAddress,
-    // addr_sent: NetworkAddress
+    addr_recv: NetAddr,
+    addr_sent: NetAddr,
     nonce: u64,
     agent: String,
     start_height: u32,
@@ -95,8 +98,8 @@ impl VersionMessage {
         version: u32,
         services: NodeServiceFlags,
         timestamp: u64,
-        // addr_recv: NetworkAddress,
-        // addr_sent: NetworkAddress,
+        addr_recv: NetAddr,
+        addr_sent: NetAddr,
         nonce: u64,
         agent: String,
         start_height: u32,
@@ -106,8 +109,8 @@ impl VersionMessage {
             version,
             services,
             timestamp,
-            // addr_recv,
-            // addr_sent,
+            addr_recv,
+            addr_sent,
             nonce,
             agent,
             start_height,
@@ -117,10 +120,11 @@ impl VersionMessage {
 }
 
 
+
+#[derive(Copy, Clone, Debug)]
+#[allow(dead_code)]
 /// Node services flag to indicate what services are available on a node.
 /// Todo: Multiflag support
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum NodeServiceFlags {
     None,
     Network,
@@ -134,6 +138,7 @@ pub enum NodeServiceFlags {
 impl NodeServiceFlags {
     pub fn value(&self) -> u64 {
         match self {
+            // Each service is a bit flag
             Self::None => 0,                // No services available
             Self::Network => 1,             // Full chain history available
             Self::GetUTXO => 2,             // Can be queried for UTXOs
@@ -141,6 +146,48 @@ impl NodeServiceFlags {
             Self::Witness => 8,             // Witness data available
             Self::CompactFilters => 64,     // Can serve basic block filte requests
             Self::NetworkLimited => 1024    // Can serve blocks from the last 2 days
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+/// When a network address is needed somewhere, this structure is used.
+pub struct NetAddr {
+    services: NodeServiceFlags,
+    ip: Ipv4Addr,
+    port: Port
+}
+
+impl NetAddr {
+    pub fn new(
+        services: NodeServiceFlags,
+        ip: Ipv4Addr,
+        port: u16
+    ) -> Self {
+        Self {
+            services,
+            ip: ip,
+            port: Port::from(port) 
+        }
+    }
+}
+
+impl Default for NetAddr {
+    fn default() -> NetAddr {
+        Self {
+            services: NodeServiceFlags::None,
+            ip: Ipv4Addr::new(0, 0, 0, 0),
+            port: Port::from(0)
+        }
+    }
+}
+
+impl From<(Ipv4Addr, Port)> for NetAddr {
+    fn from(net_info: (Ipv4Addr, Port)) -> NetAddr {
+        Self {
+            services: NodeServiceFlags::None,
+            ip: net_info.0,
+            port: net_info.1
         }
     }
 }

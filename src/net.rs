@@ -13,7 +13,7 @@ use std::net::{
 #[derive(Copy, Clone, Debug)]
 pub struct Peer {
     addr: Ipv4Addr,
-    port: u16
+    port: Port
 }
 pub type UntestedPeer = Peer; //Type alias for distinguishing between tested and untested peers.
 
@@ -21,8 +21,31 @@ impl From<[u8; 6]> for UntestedPeer {
     fn from(seed: [u8; 6]) -> Self {
         Self {
             addr: Ipv4Addr::from([seed[0], seed[1], seed[2], seed[3]]),
-            port: ((seed[4] as u16) << 8) | (seed[5] as u16)
+            port: Port::from([seed[4], seed[5]])
+            //((seed[4] as u16) << 8) | (seed[5] as u16)
         }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+/// TCP/IP Port stored as big endian bytes
+pub struct Port(pub [u8; 2]);
+
+impl From<u16> for Port {
+    fn from(port: u16) -> Port {
+        Port(port.to_be_bytes())
+    }
+}
+
+impl From<[u8; 2]> for Port {
+    fn from(port: [u8; 2]) -> Port {
+        Port(port)
+    }
+}
+
+impl Port {
+    pub fn to_u16(&self) -> u16 {
+        ((self.0[0] as u16) << 8) | (self.0[1] as u16)
     }
 }
 
@@ -62,7 +85,7 @@ impl Peer {
     
     /// Test if a peer is accepting TCP connections
     fn test_conn(&self) -> bool {
-        let peer: String = format!("{}:{}", self.addr.to_string(), self.port);
+        let peer: String = format!("{}:{}", self.addr.to_string(), self.port.to_u16());
 
         if let Ok(_) = TcpStream::connect(&peer) {
             println!("Connection established to {}", peer);
