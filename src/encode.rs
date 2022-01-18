@@ -8,16 +8,17 @@ use std::net::Ipv4Addr;
 use crate::{
     msg::{
         data::Message,
-        network::{
-            NetAddr,
-            ServicesList,
-            VersionMessage
-        },
         headers::{
             VariableInteger,
             Magic,
             Command,
             MessageHeader
+        },
+        network::{
+            NetAddr,
+            ServicesList,
+            VersionMessage,
+            VerackMessage
         }
     },
     net::peer::{
@@ -198,6 +199,13 @@ impl Encode for VersionMessage {
         self.agent.net_encode(&mut w) +
         self.start_height.net_encode(&mut w) +
         (self.relay as u8).net_encode(&mut w)
+    }
+}
+
+impl Encode for VerackMessage {
+    fn net_encode<W>(&self, _w: W) -> usize
+    where W: std::io::Write {
+        0
     }
 }
 

@@ -150,3 +150,14 @@ impl VersionMessage {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+/// Verack message struct.
+//  The verack message has no payload, it consists only of the header with the command string.
+pub struct VerackMessage();
+
+impl VerackMessage {
+    pub fn new() -> VerackMessage {
+        VerackMessage()
+    }
+}

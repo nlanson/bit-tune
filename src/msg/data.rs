@@ -37,8 +37,9 @@ use crate::{
         Command
     },
     msg::network::{
-        VersionMessage
-    }
+        VersionMessage,
+        VerackMessage
+    }, encode::Encode
 };
 use sha2::{Sha256, Digest};
 
@@ -64,25 +65,21 @@ impl Message {
 /// Enum that contians the data structures for network messages
 pub enum MessagePayload {
     Version(VersionMessage),
-    Verack
+    Verack(VerackMessage)
 }
 
 impl MessagePayload {
-    /// Get the length of the encoded payload
+    /// Get the length of the encoded payload by encoding the
+    /// message and returning the length of the encoded message.
     pub fn len(&self) -> usize {
-        todo!();
+        match self {
+            Self::Version(v) => v.net_encode(Vec::new()),
+            Self::Verack(_) => 0,
+        }
     }
 
     /// Hash the payload to create the checksum
     pub fn hash(&self) -> [u8; 4] {
         todo!();
     }
-}
-
-/// Trait inherited by all message payload enum value structs to construct the inner struct.
-pub trait BuildMesssage {
-    type BuildOptions;
-
-    fn build(options: Self::BuildOptions) -> Self
-    where Self: Sized;
 }
