@@ -4,13 +4,21 @@
 //
 //
 
+use crate::msg::{
+    data::{
+        MessagePayload
+    }
+};
+use sha2::{
+    Sha256, Digest
+};
 
 /// Message header structure
 #[derive(Debug, Clone)]
 pub struct MessageHeader {
     pub magic: Magic,
     pub command: Command,
-    pub length: VariableInteger,
+    pub length: u32,
     pub checksum: [u8; 4]
 }
 
@@ -19,7 +27,7 @@ impl MessageHeader {
         Self {
             magic,
             command,
-            length: VariableInteger::from(pylen),
+            length: pylen as u32,
             checksum
         }
     }
@@ -61,6 +69,14 @@ impl Command {
     }
 }
 
+impl From<&MessagePayload> for Command {
+    fn from(payload: &MessagePayload) -> Self {
+        match payload {
+            MessagePayload::Version(_) => Command::Version,
+            MessagePayload::Verack(_) => Command::Verack
+        }
+    }
+}
 
 // Variable length integer structure
 #[derive(Debug, Clone)]
@@ -81,3 +97,21 @@ varint_from!(u16);
 varint_from!(u32);
 varint_from!(u64);
 varint_from!(usize);
+
+
+pub trait Checksum {
+    fn checksum(&self) -> [u8; 4];
+}
+
+/// Sha256d convenience function
+pub fn sha256d<T: AsRef<[u8]>>(data: T) -> [u8; 32] {
+    let mut ret: [u8; 32] = [0; 32];
+    let mut o = Sha256::new();
+    let mut i = Sha256::new();
+
+    i.update(data);
+    o.update(i.finalize());
+    
+    ret.copy_from_slice(&o.finalize()[..]);
+    ret
+}

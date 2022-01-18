@@ -31,17 +31,18 @@
 //      - Message payloads will not be deserialized for unsupported network messages
 
 use crate::{
-    msg::headers::{
+    msg::header::{
         MessageHeader,
         Magic,
-        Command
+        Command,
+        Checksum
     },
     msg::network::{
         VersionMessage,
         VerackMessage
-    }, encode::Encode
+    },
+    encode::Encode
 };
-use sha2::{Sha256, Digest};
 
 
 #[derive(Debug, Clone)]
@@ -59,7 +60,6 @@ impl Message {
         }
     }
 }
-
 
 #[derive(Debug, Clone)]
 /// Enum that contians the data structures for network messages
@@ -80,6 +80,22 @@ impl MessagePayload {
 
     /// Hash the payload to create the checksum
     pub fn hash(&self) -> [u8; 4] {
-        todo!();
+        match self {
+            Self::Version(v) => v.checksum(),
+            Self::Verack(v) => v.checksum()
+        }
     }
 }
+
+macro_rules! payload_from_struct {
+    ($struct: ty, $var: ident) => {
+        impl From<$struct> for MessagePayload {
+            fn from(payload: $struct) -> Self {
+                Self::$var(payload)
+            }
+        }
+    };
+}
+
+payload_from_struct!(VersionMessage, Version);
+payload_from_struct!(VerackMessage, Verack);

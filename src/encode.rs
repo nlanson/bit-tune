@@ -7,8 +7,11 @@ use std::net::Ipv4Addr;
 
 use crate::{
     msg::{
-        data::Message,
-        headers::{
+        data::{
+            Message,
+            MessagePayload
+        },
+        header::{
             VariableInteger,
             Magic,
             Command,
@@ -120,8 +123,18 @@ impl Encode for MessageHeader {
 impl Encode for Message {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
-        self.header.net_encode(&mut w)
-        // + w.write(&self.payload).expect("Failed to write");
+        self.header.net_encode(&mut w) +
+        self.payload.net_encode(&mut w)
+    }
+}
+
+impl Encode for MessagePayload {
+    fn net_encode<W>(&self, w: W) -> usize
+    where W: std::io::Write {
+        match self {
+            MessagePayload::Version(v) => v.net_encode(w),
+            MessagePayload::Verack(v) => v.net_encode(w)
+        }
     }
 }
 

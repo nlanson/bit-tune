@@ -6,9 +6,15 @@
 
 use crate::{
     net::peer::Port,
+    msg::header::{
+        Checksum,
+        sha256d
+    },
+    encode::Encode
 };
 use std::net::Ipv4Addr;
 use std::collections::HashSet;
+use sha2::{Sha256, Digest};
 
 
 #[derive(Eq, Hash, PartialEq, Copy, Clone, Debug)]
@@ -70,6 +76,7 @@ impl Default for ServicesList {
 
 #[derive(Clone, Debug)]
 /// When a network address is needed somewhere, this structure is used.
+/// When not used in the version message, a time stamp is needed. (unimplented)
 pub struct NetAddr {
     pub services: ServicesList,
     pub ip: Ipv4Addr,
@@ -151,6 +158,17 @@ impl VersionMessage {
     }
 }
 
+impl Checksum for VersionMessage {
+    fn checksum(&self) -> [u8; 4] {
+        let mut ret: [u8; 4] = [0; 4];
+        let mut payload = Vec::new();
+        self.net_encode(&mut payload);
+
+        ret.copy_from_slice(&sha256d(payload)[..4]);
+        ret
+    }
+}
+
 #[derive(Debug, Clone)]
 /// Verack message struct.
 //  The verack message has no payload, it consists only of the header with the command string.
@@ -159,5 +177,12 @@ pub struct VerackMessage();
 impl VerackMessage {
     pub fn new() -> VerackMessage {
         VerackMessage()
+    }
+}
+
+impl Checksum for VerackMessage {
+    fn checksum(&self) -> [u8; 4] {
+        // Sha256d of nothing precomputed:
+        [0x5D, 0xF6, 0xE0, 0xE2]
     }
 }

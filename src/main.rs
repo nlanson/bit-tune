@@ -22,24 +22,37 @@ mod encode;
 
 
 use net::peer::*;
+use msg::data::{
+    Message,
+    MessagePayload
+};
+use crate::msg::header::{
+    Magic,
+    Command
+};
 use msg::network::{
     VersionMessage,
     NetAddr,
     ServicesList,
-    Services
+    Services,
+    VerackMessage
 };
 use crate::encode::Encode;
 
 fn main() {
-    // Currently, running the program will simply try and connect to the minimum specified
-    // number of peers, and then spit out a version message to be sent out to the first peer.
-    let args = ApplicationArgs::from(std::env::args());
+    // Program is not yet fully functional. It does support the detection of working peers and recording those peers
+    // as well as version and verack message creation, but it cannot yet open network stream with the working peers
+    // and send/receive messages through the stream.
+    // 
+    // Below shows examples of working aspects of the program:
 
+    // Connect the minimum number of peers:
+    let args = ApplicationArgs::from(std::env::args());
     let peers = Peer::get(args.min_peers);
-        
     println!("Got {} peers...", peers.len());
 
-    // Create version message payload (No headers yet...)
+
+    // Create version message payload using the first available peer...
     let version = 70015; // Current protocol version
     let mut services = ServicesList::new(); 
     services.add_flag(Services::None); // No services
@@ -50,7 +63,6 @@ fn main() {
     let agent = String::from("cmdline:1"); // Agent (Can be anything really)
     let start_height = 0u32; // Start height
     let relay = false; // Relay
-
     let version_message = VersionMessage::new(
         version, 
         services, 
@@ -62,10 +74,22 @@ fn main() {
         start_height,
         relay
     );
+    // Create entire message from payload, selected command and magic...
+    let payload = MessagePayload::from(version_message);
+    let command = Command::from(&payload);
+    let msg: Message = Message::new(payload, Magic::Main, command);
+    let mut enc: Vec<u8> = Vec::new();
+    msg.net_encode(&mut enc);
+    println!("{:02x?}", enc);
 
-    let mut msg = Vec::new();
-    version_message.net_encode(&mut msg);
-    println!("{:02x?}", msg);
+
+    // Create a Verack message
+    let payload = MessagePayload::from(VerackMessage::new());
+    let command = Command::from(&payload);
+    let msg = Message::new(payload, Magic::Main, command);
+    let mut enc: Vec<u8> = Vec::new();
+    msg.net_encode(&mut enc);
+    println!("{:02x?}", enc);
 }
 
 
