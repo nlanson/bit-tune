@@ -3,8 +3,9 @@
 // Module involving networking code.
 //
 
-use rayon::prelude::*;
 use crate::seeds::ipv4bitseeds;
+use crate::net::Error;
+use rayon::prelude::*;
 use std::net::{
     Ipv4Addr,
     TcpStream
@@ -18,20 +19,18 @@ pub struct Peer {
 
 impl Peer {
     /// Get a list of working peers
-    pub fn get(min: usize) -> Vec<Self> {
+    pub fn get(min: usize) -> Result<Vec<Self>, Error> {
         // Get a list of potential peers from the seeds module
         let mut ut_peers: Vec<UntestedPeer> = ipv4bitseeds
             .iter()
             .map(|x| UntestedPeer::from(*x))
             .collect::<Vec<UntestedPeer>>();
 
-        // While the peer list is not the minimum length,
-        // take a chunk of untested peers, test that they work,
-        // and then push the working peers into the peers list.
-        // Then remove the peers that have been tested from the
-        // untested peers list. 
+        // While the minium number of peers is not met and there
+        // are peers to test remaining, paralell test if a peer
+        // is active or not.
         let mut peers: Vec<Peer> = vec![];
-        while peers.len() < min {
+        while peers.len() < min || ut_peers.len() < min {
             peers.extend_from_slice(
                 &ut_peers
                     .par_iter()                                            // Paralell test
@@ -47,7 +46,12 @@ impl Peer {
             ut_peers.drain(0..min);                                            // Remove tested peers
         }
 
-        peers
+        // If the minimum amount of connections could not be made, return an error.
+        if peers.len() < min {
+            return Err(Error::FailedToConnect(String::from("Failed to establish minimum peer connections")))
+        }
+
+        Ok(peers)
     }
     
     /// Test if a peer is accepting TCP connections
@@ -61,6 +65,12 @@ impl Peer {
 
         println!("Failed to connect to {}", peer);
         false
+    }
+}
+
+impl std::string::ToString for Peer {
+    fn to_string(&self) -> String {
+        format!("{}:{}", self.addr.to_string(), self.port.to_u16())
     }
 }
 

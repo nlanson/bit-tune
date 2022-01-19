@@ -48,7 +48,7 @@ fn main() {
 
     // Connect the minimum number of peers:
     let args = ApplicationArgs::from(std::env::args());
-    let peers = Peer::get(args.min_peers);
+    let peers = Peer::get(args.min_peers).unwrap();
     println!("Got {} peers...", peers.len());
 
 
