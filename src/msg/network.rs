@@ -5,7 +5,10 @@
 //
 
 use crate::{
-    net::peer::Port,
+    net::peer::{
+        Peer,
+        Port
+    },
     msg::header::{
         Checksum,
         sha256d
@@ -14,6 +17,7 @@ use crate::{
 };
 use std::net::Ipv4Addr;
 use std::collections::HashSet;
+use rand::Rng;
 use sha2::{Sha256, Digest};
 
 
@@ -125,7 +129,7 @@ pub struct VersionMessage {
     pub services: ServicesList,
     pub timestamp: std::time::SystemTime,
     pub addr_recv: NetAddr,
-    pub addr_sent: NetAddr,
+    pub addr_from: NetAddr,
     pub nonce: u64,
     pub agent: String,
     pub start_height: u32,
@@ -138,7 +142,7 @@ impl VersionMessage {
         services: ServicesList,
         timestamp: std::time::SystemTime,
         addr_recv: NetAddr,
-        addr_sent: NetAddr,
+        addr_from: NetAddr,
         nonce: u64,
         agent: String,
         start_height: u32,
@@ -149,7 +153,7 @@ impl VersionMessage {
             services,
             timestamp,
             addr_recv,
-            addr_sent,
+            addr_from,
             nonce,
             agent,
             start_height,
@@ -169,6 +173,33 @@ impl Checksum for VersionMessage {
     }
 }
 
+impl From<&Peer> for VersionMessage {
+    /// Create a default VersionMessage struct from a peer with:
+    /// * Protocol version 70016 (line 12: https://github.com/bitcoin/bitcoin/blob/master/src/version.h)
+    /// * No service flags
+    /// * Current time at fuction evoke
+    /// * Default net address structs
+    /// * Random nonce capped at u64 ceiling
+    /// * Agent "bit-tune-v0.0.1"
+    /// * Relay flag set to false
+    fn from(peer: &Peer) -> Self {
+        let mut services = ServicesList::new(); 
+        services.add_flag(Services::None);
+
+        VersionMessage::new(
+            70016, 
+            services.clone(), 
+            std::time::SystemTime::now(), 
+            NetAddr::new(services, peer.addr, peer.port),
+            NetAddr::default(),
+            rand::thread_rng().gen_range(0..u64::MAX), 
+            String::from("bit-tune-v0.0.1"), 
+            0u32,
+            false
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 /// Verack message struct.
 //  The verack message has no payload, it consists only of the header with the command string.
@@ -177,6 +208,12 @@ pub struct VerackMessage();
 impl VerackMessage {
     pub fn new() -> VerackMessage {
         VerackMessage()
+    }
+}
+
+impl Default for VerackMessage {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

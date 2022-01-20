@@ -9,3 +9,4 @@ edition = "2018"
 rayon = "1.5.1" # Multithreading library
 num_cpus = "1.13.1"
 sha2 = "0.10.1"
+rand = "0.8.4"

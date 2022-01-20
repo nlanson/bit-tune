@@ -207,7 +207,7 @@ impl Encode for VersionMessage {
         self.services.net_encode(&mut w) +
         self.timestamp.net_encode(&mut w) +
         self.addr_recv.net_encode(&mut w) +
-        self.addr_sent.net_encode(&mut w) +
+        self.addr_from.net_encode(&mut w) +
         self.nonce.net_encode(&mut w) +
         self.agent.net_encode(&mut w) +
         self.start_height.net_encode(&mut w) +
