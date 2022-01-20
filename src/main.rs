@@ -9,9 +9,7 @@
 //  - Decode incoming messages.
 //
 //  Immediate todos:
-//  - Payload hashing for message header checksum
-//  - Convinience function for creating messages that will be used
-//  - TCP Streams
+//  - TCP Streams. Multithreaded?
 
 
 // Modules
@@ -21,28 +19,42 @@ mod msg;
 mod encode;
 
 
-use net::peer::*;
-use msg::data::{
-    Message,
-    MessagePayload
+pub use rand::Rng;
+use net::{
+    peer::*,
+    stream::stream_from
 };
-use crate::msg::header::{
-    Magic,
-    Command
+use encode::Encode;
+use msg::{
+    network::{
+        VersionMessage,
+        VerackMessage
+    },
+    header::{
+        Magic,
+        Command
+    },
+    data::{
+        Message,
+        MessagePayload
+    }
 };
-use msg::network::{
-    VersionMessage,
-    NetAddr,
-    ServicesList,
-    Services,
-    VerackMessage
+
+use std::{
+    io::{
+        Write,
+        Read
+    }
 };
-use crate::encode::Encode;
+
 
 fn main() {
-    // Program is not yet fully functional. It does support the detection of working peers and recording those peers
-    // as well as version and verack message creation, but it cannot yet open network stream with the working peers
-    // and send/receive messages through the stream.
+    // Program is not yet fully functional.
+    // Currently the program can:
+    //  - Detect and record working peers
+    //  - Create "version" and "verack" messages
+    //  - Open a TCP stream with working peers
+    //  - Send "version" message to a peer and read the reply as a hex dump
     // 
     // Below shows examples of working aspects of the program:
 
@@ -52,45 +64,44 @@ fn main() {
     println!("Got {} peers...", peers.len());
 
 
-    // Create version message payload using the first available peer...
-    let version = 70015; // Current protocol version
-    let mut services = ServicesList::new(); 
-    services.add_flag(Services::None); // No services
-    let timestamp = std::time::SystemTime::now(); // Current time
-    let addr_recv = NetAddr::new(services.clone(), peers[0].addr, peers[0].port); // Receiving address. Services should not be none
-    let addr_sent = NetAddr::default(); // Sending address (our local IP)
-    let nonce = 16735069437859780935u64; // Random nonce (Should use RNG)
-    let agent = String::from("cmdline:1"); // Agent (Can be anything really)
-    let start_height = 0u32; // Start height
-    let relay = false; // Relay
-    let version_message = VersionMessage::new(
-        version, 
-        services, 
-        timestamp, 
-        addr_recv, 
-        addr_sent,
-        nonce, 
-        agent, 
-        start_height,
-        relay
-    );
-    // Create entire message from payload, selected command and magic...
+    // Create version message using the first available peer...
+    let version_message = VersionMessage::from(&peers[0]);
     let payload = MessagePayload::from(version_message);
     let command = Command::from(&payload);
     let msg: Message = Message::new(payload, Magic::Main, command);
-    let mut enc: Vec<u8> = Vec::new();
-    msg.net_encode(&mut enc);
-    println!("{:02x?}", enc);
+    let mut first_message: Vec<u8> = Vec::new();
+    msg.net_encode(&mut first_message);
 
 
     // Create a Verack message
     let payload = MessagePayload::from(VerackMessage::new());
     let command = Command::from(&payload);
     let msg = Message::new(payload, Magic::Main, command);
-    let mut enc: Vec<u8> = Vec::new();
-    msg.net_encode(&mut enc);
-    println!("{:02x?}", enc);
+    let mut second_message: Vec<u8> = Vec::new();
+    msg.net_encode(&mut second_message);
+
+    // Open a TCP stream with the first peer
+    let mut stream = stream_from(peers[0]).expect("Failed to establish stream.");
+    let mut buf: [u8; 512] = [0; 512];
+
+    // Send the first version message
+    stream.write(&first_message).expect("Failed to send first message");
+
+    // Listen to the stream indefinately, printing replies and errors.
+    loop {
+        match stream.read(&mut buf) {
+            Ok(size) => {
+                let rep = &buf[..size];
+                println!("Reply: {:02x?}", rep);
+            },
+            Err(e) => {
+                println!("Error: {:?}", e);
+            }
+        }
+    }
 }
+
+
 
 
 #[derive(Debug)]

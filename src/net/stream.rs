@@ -9,16 +9,19 @@ use crate::net::{
     },
     Error
 };
-use std::net::{
-    TcpStream
+use std::{
+    net::TcpStream,
+    io::{
+        Write,
+        Read,
+        BufReader
+    }
 };
 
-impl From<Peer> for Result<TcpStream, Error> {
-    /// Create a tcp stream from a peer
-    fn from(peer: Peer) -> Result<TcpStream, Error> {
-        match TcpStream::connect(peer.to_string()) {
-            Ok(x) => Ok(x),
-            Err(_) => Err(Error::FailedToConnect(peer.to_string()))
-        }
+/// Create a tcp stream from a peer
+pub fn stream_from(peer: Peer) -> Result<TcpStream, Error> {
+    match TcpStream::connect(peer.to_string()) {
+        Ok(x) => Ok(x),
+        Err(_) => Err(Error::FailedToConnect(peer.to_string()))
     }
 }
