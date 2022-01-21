@@ -63,7 +63,7 @@ macro_rules! integer_le_decode {
         impl Decode for $int {
             fn net_decode<R>(mut r: R) -> Result<$int, Error>
             where
-                R: std::io::Read,
+                R: std::io::Read ,
                 Self: Sized
             {
                 let mut buf = [0; std::mem::size_of::<$int>()];
@@ -114,7 +114,7 @@ macro_rules! array_decode {
         impl Decode for [u8; $len] {
             fn net_decode<R>(mut r: R) -> Result<Self, Error>
             where
-                R: std::io::Read,
+                R: std::io::Read ,
                 Self: Sized
             {
                 let mut buf: [u8; $len] = [0; $len];
@@ -160,7 +160,7 @@ impl Encode for VariableInteger {
 }
 
 impl Decode for VariableInteger {
-    fn net_decode<R: std::io::Read>(mut r: R) -> Result<Self, Error> {
+    fn net_decode<R: std::io::Read >(mut r: R) -> Result<Self, Error> {
         let mut buf = [0; 10];
         let len = r.read(&mut buf).expect("Failed to read");
 
@@ -258,6 +258,28 @@ impl Encode for Message {
     }
 }
 
+impl Decode for Message {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        let header: MessageHeader = Decode::net_decode(&mut r)?;
+
+        // Message payload doesn't implement the [`Decode`] trait on it's own as
+        // it cannot be decoded without knowledge of the command used in the header.
+        // This is becase each command has a different payload structure.
+        let payload: MessagePayload = match header.command {
+            Command::Version => MessagePayload::from(VersionMessage::net_decode(&mut r)?),
+            Command::Verack => MessagePayload::from(VerackMessage::net_decode(&mut r)?)
+        };
+        
+        Ok(
+            Message {
+                header: Decode::net_decode(&mut r)?,
+                payload
+            }
+        )
+    }
+}
+
 impl Encode for MessagePayload {
     fn net_encode<W>(&self, w: W) -> usize
     where W: std::io::Write {
@@ -345,10 +367,24 @@ impl Encode for VersionMessage {
     }
 }
 
+impl Decode for VersionMessage {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        todo!("Implement decoding for Version Message and associated types...");
+    }
+}
+
 impl Encode for VerackMessage {
     fn net_encode<W>(&self, _w: W) -> usize
     where W: std::io::Write {
         0
+    }
+}
+
+impl Decode for VerackMessage {
+    fn net_decode<R>(_r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        Ok(Self::default())
     }
 }
 
