@@ -35,6 +35,16 @@ pub trait Encode {
     where W: std::io::Write;
 }
 
+pub trait Decode: Sized {
+    fn net_decode<R>(r: R) -> Result<Self, Error> 
+    where R: std::io::Read;
+}
+
+#[derive(Debug)]
+pub enum Error {
+    InvalidData
+}
+
 /// Macro to encode integers in little endian.
 macro_rules! integer_le_encode {
     ($int: ty) => {
@@ -46,11 +56,46 @@ macro_rules! integer_le_encode {
         }
     };
 }
+
+/// Macro to decode little endian integers
+macro_rules! integer_le_decode {
+    ($int: ty) => {
+        impl Decode for $int {
+            fn net_decode<R>(mut r: R) -> Result<$int, Error>
+            where
+                R: std::io::Read,
+                Self: Sized
+            {
+                let mut buf = [0; std::mem::size_of::<$int>()];
+                r.read_exact(&mut buf).expect("Failed to read");
+                
+                let mut ret: u64 = 0;
+                let mut i = buf.len() - 1;
+                loop {
+                    ret ^= buf[i] as u64;
+                    if i == 0 { break }
+                    i-=1;
+                    ret = ret << 8; 
+                }
+                
+                Ok(ret as $int)
+            }
+        }
+    }
+}
+
 integer_le_encode!(u8);
 integer_le_encode!(u16);
 integer_le_encode!(u32);
 integer_le_encode!(u64);
 integer_le_encode!(usize);
+
+integer_le_decode!(u8);
+integer_le_decode!(u16);
+integer_le_decode!(u32);
+integer_le_decode!(u64);
+integer_le_decode!(usize);
+
 
 /// Macro to encode arrays
 macro_rules! array_encode {
@@ -63,8 +108,29 @@ macro_rules! array_encode {
         }
     };
 }
+
+macro_rules! array_decode {
+    ($len: expr) => {
+        impl Decode for [u8; $len] {
+            fn net_decode<R>(mut r: R) -> Result<Self, Error>
+            where
+                R: std::io::Read,
+                Self: Sized
+            {
+                let mut buf: [u8; $len] = [0; $len];
+                r.read_exact(&mut buf).expect("Failed to read");
+                
+                Ok(buf)
+            }
+        }
+    }
+}
+
 array_encode!(4);
 array_encode!(2);
+
+array_decode!(4);
+array_decode!(2);
 
 
 impl Encode for VariableInteger {
@@ -93,10 +159,44 @@ impl Encode for VariableInteger {
     }
 }
 
+impl Decode for VariableInteger {
+    fn net_decode<R: std::io::Read>(mut r: R) -> Result<Self, Error> {
+        let mut buf = [0; 10];
+        let len = r.read(&mut buf).expect("Failed to read");
+
+        match len {
+            1 => {
+                Ok(VariableInteger::from(buf[0]))
+            },
+            _ => {
+                Ok(
+                    VariableInteger::from(
+                        u64::net_decode(&buf[1..9]).expect("Failed to decode")
+                    )
+                ) 
+            }
+        }        
+    }
+}
+
 impl Encode for Magic {
     fn net_encode<W>(&self, w: W) -> usize
     where W: std::io::Write {
         self.bytes().net_encode(w)
+    }
+}
+
+impl Decode for Magic {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        let mut buf = [0; 4];
+        r.read(&mut buf).expect("Failed to read");
+        buf.reverse();
+
+        match Magic::from(buf) {
+            Magic::Unknown => return Err(Error::InvalidData),
+            x => Ok(x)
+        }
     }
 }
 
@@ -110,6 +210,22 @@ impl Encode for Command {
     }
 }
 
+impl Decode for Command {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        let mut buf = [0; 12];
+        r.read(&mut buf).expect("Failed to read");
+
+        Self::from_str(
+        buf
+                .iter()
+                .take_while(|x| **x != 0x00)
+                .map(|c| *c as char)
+                .collect::<String>()
+        )
+    }
+}
+
 impl Encode for MessageHeader {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
@@ -117,6 +233,20 @@ impl Encode for MessageHeader {
         self.command.net_encode(&mut w) +
         self.length.net_encode(&mut w) +
         self.checksum.net_encode(&mut w)
+    }
+}
+
+impl Decode for MessageHeader {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        let magic = Magic::net_decode(&mut r).unwrap();
+        let command = Command::net_decode(&mut r).unwrap();
+        let length: u32 = Decode::net_decode(&mut r).unwrap();
+        let checksum: [u8; 4] = Decode::net_decode(&mut r).unwrap();
+
+        Ok(
+            Self::new(magic, command, length as usize, checksum)
+        )
     }
 }
 
@@ -235,7 +365,9 @@ mod tests {
         let lens: [usize; 9] = [1, 1, 3, 3, 3, 5, 5, 5, 9];
 
         for i in 0..ints.len() {
-            assert_eq!(VariableInteger::from(ints[i]).net_encode(Vec::new()), lens[i])
+            let mut enc: Vec<u8> = Vec::new();
+            assert_eq!(VariableInteger::from(ints[i]).net_encode(&mut enc), lens[i]);
+            assert_eq!(VariableInteger::net_decode(&enc[..]).unwrap(), VariableInteger::from(ints[i]))
         }
     }
 
@@ -260,5 +392,41 @@ mod tests {
         flags.net_encode(&mut encoded);
         
         assert_eq!(encoded, &[0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    }
+
+    #[test]
+    fn integer_le() {
+        let int: u8 = 0xFF;
+        let mut enc: Vec<u8> = Vec::new();
+        int.net_encode(&mut enc);
+        let dec = u8::net_decode(&enc[..]).expect("Failed to decode");
+        assert_eq!(int, dec);
+
+        let int: u16 = 0xFFFF;
+        let mut enc: Vec<u8> = Vec::new();
+        int.net_encode(&mut enc);
+        let dec = u16::net_decode(&enc[..]).expect("Failed to decode");
+        assert_eq!(int, dec);
+
+        let int: u32 = 0xFFFF_FFFF;
+        let mut enc: Vec<u8> = Vec::new();
+        int.net_encode(&mut enc);
+        let dec = u32::net_decode(&enc[..]).expect("Failed to decode");
+        assert_eq!(int, dec);
+
+        let int: u64 = 0xFFFF_FFFF_FFFF_FFFF;
+        let mut enc: Vec<u8> = Vec::new();
+        int.net_encode(&mut enc);
+        let dec = u64::net_decode(&enc[..]).expect("Failed to decode");
+        assert_eq!(int, dec);
+    }
+
+    #[test]
+    fn header_decode() {
+        let header = MessageHeader::new(Magic::Main, Command::Verack, 00, [0x5D, 0xF6, 0xE0, 0xE2]);
+        let mut enc: Vec<u8> = Vec::new();
+        header.net_encode(&mut enc);
+        let dec: MessageHeader = Decode::net_decode(&enc[..]).expect("Failed to decode");
+        assert_eq!(header, dec);
     }
 }

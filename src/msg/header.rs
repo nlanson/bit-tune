@@ -9,12 +9,13 @@ use crate::msg::{
         MessagePayload
     }
 };
+use crate::encode::Error;
 use sha2::{
     Sha256, Digest
 };
 
 /// Message header structure
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MessageHeader {
     pub magic: Magic,
     pub command: Command,
@@ -34,10 +35,11 @@ impl MessageHeader {
 }
 
 /// Network magic enum
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Magic {
     Main,
-    Test
+    Test,
+    Unknown
 }
 
 impl Magic {
@@ -45,14 +47,23 @@ impl Magic {
     pub fn bytes(&self) -> u32 {
         match self {
             Magic::Main => 0xD9B4BEF9,
-            Magic::Test => 0xDAB5BFFA
+            Magic::Test => 0xDAB5BFFA,
+            _ =>           0x00000000
         }
+    }
+}
+
+impl From<[u8; 4]> for Magic {
+    fn from(bytes: [u8; 4]) -> Self {
+        if bytes == Magic::Main.bytes().to_be_bytes() { return Magic::Main }
+        else if bytes == Magic::Test.bytes().to_be_bytes() { return Magic::Test }
+        else { return Magic::Unknown }
     }
 }
 
 
 /// Network command enum
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum Command {
     Version,
@@ -67,6 +78,14 @@ impl Command {
             Self::Verack =>  "verack"
         }
     }
+
+    pub fn from_str(cmd: String) -> Result<Self, Error> {
+        match &cmd[..] {
+            "version" => Ok(Self::Version),
+            "verack" => Ok(Self::Verack),
+            _ => Err(Error::InvalidData)
+        }
+    }
 }
 
 impl From<&MessagePayload> for Command {
@@ -79,7 +98,7 @@ impl From<&MessagePayload> for Command {
 }
 
 // Variable length integer structure
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariableInteger(pub u64);
 
 macro_rules! varint_from {
