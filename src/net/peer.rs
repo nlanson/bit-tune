@@ -86,7 +86,7 @@ impl From<[u8; 6]> for UntestedPeer {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 /// TCP/IP Port stored as big endian bytes
 //  Hence the use of [u8; 2] instead of u16.
 pub struct Port(pub [u8; 2]);

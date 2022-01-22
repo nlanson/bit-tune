@@ -67,7 +67,7 @@ impl From<[u8; 4]> for Magic {
 #[allow(dead_code)]
 pub enum Command {
     Version,
-    Verack,
+    Verack
     //More to come...
 }
 
@@ -100,6 +100,12 @@ impl From<&MessagePayload> for Command {
 // Variable length integer structure
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariableInteger(pub u64);
+
+impl VariableInteger {
+    pub fn inner(&self) -> u64 {
+        self.0
+    }
+}
 
 macro_rules! varint_from {
     ($int: ty) => {

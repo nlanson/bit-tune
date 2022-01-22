@@ -13,18 +13,24 @@ use crate::{
         Checksum,
         sha256d
     },
-    encode::Encode
+    encode::{
+        Encode,
+        Error
+    }
 };
 use std::net::Ipv4Addr;
 use std::collections::HashSet;
+use std::time::{
+    SystemTime,
+    Duration
+};
 use rand::Rng;
-use sha2::{Sha256, Digest};
 
 
 #[derive(Eq, Hash, PartialEq, Copy, Clone, Debug)]
 #[allow(dead_code)]
-/// Node services flag to indicate what services are available on a node.
-pub enum Services {
+/// Node service flag to indicate what service are available on a node.
+pub enum Service {
     None,
     Network,
     GetUTXO,
@@ -34,36 +40,59 @@ pub enum Services {
     NetworkLimited
 }
 
-impl Services {
+// Constant array containing the right shift amount for each service flag.
+pub const SERVICE_BITS: [usize; 6] = [
+    0, // Network
+    1, // GetUTXO
+    2, // Bloom
+    3, // Witness
+    6, // CompactFilters
+    10 // NetworkLimited
+];
+
+impl Service {
     pub fn value(&self) -> u64 {
         match self {
             // Each service is a bit flag
-            Self::None => 0,                // No services available
-            Self::Network => 1,             // Full chain history available
-            Self::GetUTXO => 2,             // Can be queried for UTXOs
-            Self::Bloom => 4,               // Capable of handling bloom filtered connections
-            Self::Witness => 8,             // Witness data available
-            Self::CompactFilters => 64,     // Can serve basic block filte requests
-            Self::NetworkLimited => 1024    // Can serve blocks from the last 2 days
+            Self::None => 0,                              // No service available
+            Self::Network =>        (1<<SERVICE_BITS[0]), // Full chain history available
+            Self::GetUTXO =>        (1<<SERVICE_BITS[1]), // Can be queried for UTXOs
+            Self::Bloom =>          (1<<SERVICE_BITS[2]), // Capable of handling bloom filtered connections
+            Self::Witness =>        (1<<SERVICE_BITS[3]), // Witness data available
+            Self::CompactFilters => (1<<SERVICE_BITS[4]), // Can serve basic block filte requests
+            Self::NetworkLimited => (1<<SERVICE_BITS[5])  // Can serve blocks from the last 2 days
+        }
+    }
+
+    pub fn try_from_bit(flag: u64) -> Result<Self, Error> {
+        match flag {
+            0 => Ok(Self::None),
+            1 => Ok(Self::Network),
+            2 => Ok(Self::GetUTXO),
+            4 => Ok(Self::Bloom),
+            8 => Ok(Self::Witness),
+            64 => Ok(Self::CompactFilters),
+            1024 => Ok(Self::NetworkLimited),
+            _ => Err(Error::InvalidData)
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 /// A list of service flags in a hash set.
 /// DOES NOT ENFORCE CONFLICTING FLAGS
-pub struct ServicesList(std::collections::HashSet<Services>);
+pub struct ServicesList(std::collections::HashSet<Service>);
 
 impl ServicesList {
     pub fn new() -> Self {
         ServicesList(HashSet::new())
     }
 
-    pub fn add_flag(&mut self, flag: Services) {
+    pub fn add_flag(&mut self, flag: Service) {
         self.0.insert(flag);
     }
 
-    pub fn get_flags(&self) -> Vec<Services> {
+    pub fn get_flags(&self) -> Vec<Service> {
         self.0.iter().map(|flag| *flag).collect()
     }
 }
@@ -71,30 +100,30 @@ impl ServicesList {
 impl Default for ServicesList {
     fn default() -> Self {
         let mut flags = Self::new();
-        flags.add_flag(Services::None);
+        flags.add_flag(Service::None);
         flags
     }
 }
 
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 /// When a network address is needed somewhere, this structure is used.
 /// When not used in the version message, a time stamp is needed. (unimplented)
 pub struct NetAddr {
-    pub services: ServicesList,
+    pub service: ServicesList,
     pub ip: Ipv4Addr,
     pub port: Port,
 }
 
 impl NetAddr {
     pub fn new(
-        services: ServicesList,
+        service: ServicesList,
         ip: Ipv4Addr,
         port: Port
     ) -> Self {
         Self {
-            services,
+            service,
             ip: ip,
             port: port
         }
@@ -104,7 +133,7 @@ impl NetAddr {
 impl Default for NetAddr {
     fn default() -> NetAddr {
         Self {
-            services: ServicesList::new(),
+            service: ServicesList::default(),
             ip: Ipv4Addr::new(0, 0, 0, 0),
             port: Port::from(0)
         }
@@ -114,7 +143,7 @@ impl Default for NetAddr {
 impl From<(Ipv4Addr, Port)> for NetAddr {
     fn from(net_info: (Ipv4Addr, Port)) -> NetAddr {
         Self {
-            services: ServicesList::new(),
+            service: ServicesList::new(),
             ip: net_info.0,
             port: net_info.1
         }
@@ -122,12 +151,12 @@ impl From<(Ipv4Addr, Port)> for NetAddr {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 /// The message payload for version commands.
 pub struct VersionMessage {
     pub version: u32,
-    pub services: ServicesList,
-    pub timestamp: std::time::SystemTime,
+    pub service: ServicesList,
+    pub timestamp: Duration,
     pub addr_recv: NetAddr,
     pub addr_from: NetAddr,
     pub nonce: u64,
@@ -139,8 +168,8 @@ pub struct VersionMessage {
 impl VersionMessage {
     pub fn new(
         version: u32,
-        services: ServicesList,
-        timestamp: std::time::SystemTime,
+        service: ServicesList,
+        timestamp: Duration,
         addr_recv: NetAddr,
         addr_from: NetAddr,
         nonce: u64,
@@ -150,7 +179,7 @@ impl VersionMessage {
     ) -> VersionMessage {
         Self {
             version,
-            services,
+            service,
             timestamp,
             addr_recv,
             addr_from,
@@ -183,20 +212,31 @@ impl From<&Peer> for VersionMessage {
     /// * Agent "bit-tune-v0.0.1"
     /// * Relay flag set to false
     fn from(peer: &Peer) -> Self {
-        let mut services = ServicesList::new(); 
-        services.add_flag(Services::None);
-
         VersionMessage::new(
-            70016, 
-            services.clone(), 
-            std::time::SystemTime::now(), 
-            NetAddr::new(services, peer.addr, peer.port),
+            70015, 
+            ServicesList::default(), 
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("Failed to get time"), 
+            NetAddr::new(ServicesList::default(), peer.addr, peer.port),
             NetAddr::default(),
             rand::thread_rng().gen_range(0..u64::MAX), 
             String::from("bit-tune-v0.0.1"), 
             0u32,
             false
         )
+    }
+}
+
+impl PartialEq for VersionMessage {
+    fn eq(&self, other: &Self) -> bool { 
+        self.version == other.version &&
+        self.service == other.service &&
+        self.timestamp.as_secs() == other.timestamp.as_secs() && // Need to call as_secs() or else the code will be comparing floating points
+        self.addr_from == other.addr_from &&
+        self.addr_recv == other.addr_recv &&
+        self.nonce == other.nonce &&
+        self.agent == other.agent &&
+        self.start_height == other.start_height &&
+        self.relay == other.relay
     }
 }
 

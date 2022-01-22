@@ -4,6 +4,7 @@
 //
 
 use std::net::Ipv4Addr;
+use std::time::Duration;
 
 use crate::{
     msg::{
@@ -21,7 +22,9 @@ use crate::{
             NetAddr,
             ServicesList,
             VersionMessage,
-            VerackMessage
+            VerackMessage,
+            Service,
+            SERVICE_BITS
         }
     },
     net::peer::{
@@ -128,9 +131,11 @@ macro_rules! array_decode {
 
 array_encode!(4);
 array_encode!(2);
+array_encode!(16);
 
 array_decode!(4);
 array_decode!(2);
+array_decode!(16);
 
 
 impl Encode for VariableInteger {
@@ -161,21 +166,48 @@ impl Encode for VariableInteger {
 
 impl Decode for VariableInteger {
     fn net_decode<R: std::io::Read >(mut r: R) -> Result<Self, Error> {
-        let mut buf = [0; 10];
-        let len = r.read(&mut buf).expect("Failed to read");
+        // let mut buf = [0; 10];
+        // let len = r.read(&mut buf).expect("Failed to read");
 
-        match len {
-            1 => {
-                Ok(VariableInteger::from(buf[0]))
-            },
-            _ => {
-                Ok(
-                    VariableInteger::from(
-                        u64::net_decode(&buf[1..9]).expect("Failed to decode")
-                    )
-                ) 
-            }
-        }        
+        // match len {
+        //     1 => {
+        //         Ok(VariableInteger::from(buf[0]))
+        //     },
+        //     _ => {
+        //         Ok(
+        //             VariableInteger::from(
+        //                 u64::net_decode(&buf[1..9]).expect("Failed to decode")
+        //             )
+        //         ) 
+        //     }
+        // }
+        
+        
+        // Read the first byte as a length indicator and match it with protocol varint length indicators
+        // to set the buffer length of the integer that follows
+        let mut len_indic: [u8; 1] = [0; 1];
+        r.read_exact(&mut len_indic).expect("Failed to read");
+        let mut buf: Vec<u8> = match len_indic[0] {
+            0xFD => vec![0; 2],
+            0xFE => vec![0; 4],
+            0xFF => vec![0; 8],
+            _ =>    vec![0; 1]
+        };
+
+        // The varint did not have a prefix, return the value
+        if buf.len() == 1 {
+            return Ok(VariableInteger::from(len_indic[0] as u64))
+        }
+
+        // The varint did have a length indicating prefix.
+        // Read the integer and append zeroes to cast it as a LE u64.
+        r.read_exact(&mut buf).expect("Failed to read");
+        while buf.len() != 8 {
+            buf.push(0x00);
+        }
+
+        // Return the LE u64 decoded as a Varint
+        return Ok(VariableInteger::from(u64::net_decode(&buf[..])?))
     }
 }
 
@@ -239,10 +271,10 @@ impl Encode for MessageHeader {
 impl Decode for MessageHeader {
     fn net_decode<R>(mut r: R) -> Result<Self, Error>
     where R: std::io::Read {
-        let magic = Magic::net_decode(&mut r).unwrap();
-        let command = Command::net_decode(&mut r).unwrap();
-        let length: u32 = Decode::net_decode(&mut r).unwrap();
-        let checksum: [u8; 4] = Decode::net_decode(&mut r).unwrap();
+        let magic = Magic::net_decode(&mut r)?;
+        let command = Command::net_decode(&mut r)?;
+        let length: u32 = Decode::net_decode(&mut r)?;
+        let checksum: [u8; 4] = Decode::net_decode(&mut r)?;
 
         Ok(
             Self::new(magic, command, length as usize, checksum)
@@ -299,6 +331,22 @@ impl Encode for String {
     }
 }
 
+impl Decode for String {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        let varint: VariableInteger = Decode::net_decode(&mut r)?;
+        let mut buf = vec![0; varint.inner() as usize];
+        r.read_exact(&mut buf).expect("Failed to read");
+
+        Ok(
+            buf
+                .iter()
+                .map(|x| *x as char)
+                .collect::<String>()
+        )
+    }
+}
+
 impl Encode for Port {
     fn net_encode<W>(&self, w: W) -> usize
     where W: std::io::Write {
@@ -306,11 +354,35 @@ impl Encode for Port {
     }
 }
 
+impl Decode for Port {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        let port: [u8; 2] = Decode::net_decode(&mut r)?;
+        Ok(Port::from(port))
+    }
+}
+
 impl Encode for Ipv4Addr {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
         // Ipv4 addresses are encoded as an Ipv4 mapped Ipv6 address.
-        w.write(&self.to_ipv6_mapped().octets()).expect("Failed to write")
+        self
+            .to_ipv6_mapped()
+            .octets()
+            .net_encode(&mut w)
+
+        //w.write(&self.to_ipv6_mapped().octets()).expect("Failed to write")
+    }
+}
+
+impl Decode for Ipv4Addr {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        // Ipv4 addresses are encoded as IPv6 mapped addresses.
+        let mut ipv4b: [u8; 4] = [0; 4];
+        let ipv6b: [u8; 16] = Decode::net_decode(&mut r)?;
+        ipv4b.copy_from_slice(&ipv6b[ipv6b.len()-4..]);
+        Ok(Ipv4Addr::from(ipv4b))
     }
 }
 
@@ -332,23 +404,60 @@ impl Encode for ServicesList {
     }
 }
 
+impl Decode for ServicesList {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        let flags: u64 = Decode::net_decode(&mut r)?;
+
+        // Early exit for flags with no bits set...
+        if flags == 0 {
+            return Ok(ServicesList::default());
+        }
+
+        // Iterate through all possible set flags and record any flags that are set.
+        let mut services = ServicesList::new();
+        for bitp in SERVICE_BITS {
+            if flags & (1<<bitp) == (1<<bitp) {
+                let flag = Service::try_from_bit(1<<bitp)?;
+                services.add_flag(flag);
+            }
+        }
+
+        Ok(services)
+    }
+}
+
 impl Encode for NetAddr {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
-        self.services.net_encode(&mut w) +
+        self.service.net_encode(&mut w) +
         self.ip.net_encode(&mut w) +
         self.port.net_encode(&mut w)
     }
 }
 
-impl Encode for std::time::SystemTime {
+impl Decode for NetAddr {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        Ok(
+            Self::new(ServicesList::net_decode(&mut r)?, Decode::net_decode(&mut r)?, Decode::net_decode(&mut r)?)
+        )
+    }
+}
+
+impl Encode for Duration {
     fn net_encode<W>(&self, w: W) -> usize
     where W: std::io::Write {
         self
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .expect("Could not get unix time")
             .as_secs()
             .net_encode(w)
+    }
+}
+
+impl Decode for Duration {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        Ok(Duration::from_secs(Decode::net_decode(&mut r)?))
     }
 }
 
@@ -356,7 +465,7 @@ impl Encode for VersionMessage {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
         self.version.net_encode(&mut w) +
-        self.services.net_encode(&mut w) +
+        self.service.net_encode(&mut w) +
         self.timestamp.net_encode(&mut w) +
         self.addr_recv.net_encode(&mut w) +
         self.addr_from.net_encode(&mut w) +
@@ -370,7 +479,31 @@ impl Encode for VersionMessage {
 impl Decode for VersionMessage {
     fn net_decode<R>(mut r: R) -> Result<Self, Error>
     where R: std::io::Read {
-        todo!("Implement decoding for Version Message and associated types...");
+        let version: u32 = Decode::net_decode(&mut r)?;
+        let services: ServicesList = Decode::net_decode(&mut r)?;
+        let timestamp: Duration = Decode::net_decode(&mut r)?;
+        let addr_recv: NetAddr = Decode::net_decode(&mut r)?;
+        let addr_from: NetAddr = Decode::net_decode(&mut r)?;
+        let nonce: u64 = Decode::net_decode(&mut r)?;
+        let agent: String = Decode::net_decode(&mut r)?;
+        let start_height: u32 = Decode::net_decode(&mut r)?;
+        let relay = match u8::net_decode(&mut r)? {
+            0 => false,
+            _ => true
+        };
+        
+        
+        Ok(VersionMessage::new(
+            version,
+            services,
+            timestamp,
+            addr_recv,
+            addr_from,
+            nonce,
+            agent,
+            start_height,
+            relay
+        ))
     }
 }
 
@@ -393,7 +526,7 @@ impl Decode for VerackMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::msg::network::Services;
+    use crate::msg::network::Service;
 
     #[test]
     fn varint_test() {
@@ -422,7 +555,7 @@ mod tests {
     #[test]
     fn service_flags() {
         let mut flags = ServicesList::new();
-        flags.add_flag(Services::Network);
+        flags.add_flag(Service::Network);
         
         let mut encoded = Vec::new();
         flags.net_encode(&mut encoded);
@@ -464,5 +597,16 @@ mod tests {
         header.net_encode(&mut enc);
         let dec: MessageHeader = Decode::net_decode(&enc[..]).expect("Failed to decode");
         assert_eq!(header, dec);
+    }
+
+    #[test]
+    fn version_encode_decode() {
+        let peer = crate::net::peer::Peer::from([1, 2, 3, 4, 5, 6]);
+        let vm = VersionMessage::from(&peer);
+        let mut enc = Vec::new();
+        vm.net_encode(&mut enc);
+        let dec: VersionMessage = Decode::net_decode(&enc[..]).expect("Failed to decode");
+
+        assert_eq!(vm, dec);
     }
 }
