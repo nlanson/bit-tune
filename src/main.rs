@@ -10,6 +10,7 @@
 //
 //  Immediate todos:
 //  - TCP Streams. Multithreaded?
+//  - Implement other common network messages (ie. sendheader, wtxidrelay, ...)
 
 
 // Modules
