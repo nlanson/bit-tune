@@ -47,6 +47,8 @@ use std::{
     }
 };
 
+use crate::{encode::Decode, net::stream};
+
 
 fn main() {
     // Program is not yet fully functional.
@@ -81,23 +83,36 @@ fn main() {
     msg.net_encode(&mut second_message);
 
     // Open a TCP stream with the first peer
-    let mut stream = stream_from(peers[0]).expect("Failed to establish stream.");
-    let mut buf: [u8; 512] = [0; 512];
+    if let Ok(mut stream) = stream_from(peers[0]) {
+        // Send a version message
+        let _ = stream.write(&first_message);
+        println!("Sent version message");
 
-    // Send the first version message
-    stream.write(&first_message).expect("Failed to send first message");
+        let read_stream = stream.try_clone().unwrap();
+        let mut stream_reader = std::io::BufReader::new(read_stream);
+        
+        // Loop and retrieve new messages
+        loop {
+            // Will fail here if an unknown/invalid message is received.
+            // If a bad message is received here, the program will not be able to recover
+            // as the buffer would be distrupted.
+            let reply = Message::net_decode(&mut stream_reader).expect("Failed to decode");
 
-    // Listen to the stream indefinately, printing replies and errors.
-    loop {
-        match stream.read(&mut buf) {
-            Ok(size) => {
-                let rep = &buf[..size];
-                println!("Reply: {:02x?}", rep);
-            },
-            Err(e) => {
-                println!("Error: {:?}", e);
+            match reply.payload {
+                MessagePayload::Version(_) => {
+                    println!("Received version message");
+                    let _ = stream.write(&second_message);
+                    println!("Sent verack message");
+                },
+                MessagePayload::Verack(_) => {
+                    println!("Received verack message");
+                    break;
+                }
             }
         }
+        let _ = stream.shutdown(std::net::Shutdown::Both);
+    } else {
+        eprintln!("Failed to open connection");
     }
 }
 
