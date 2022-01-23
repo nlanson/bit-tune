@@ -38,8 +38,7 @@ use crate::{
         Checksum
     },
     msg::network::{
-        VersionMessage,
-        VerackMessage
+        VersionMessage
     },
     encode::Encode
 };
@@ -65,7 +64,9 @@ impl Message {
 /// Enum that contians the data structures for network messages
 pub enum MessagePayload {
     Version(VersionMessage),
-    Verack(VerackMessage)
+    Verack,
+    SendHeaders,
+    WTxIdRelay
 }
 
 impl MessagePayload {
@@ -74,7 +75,9 @@ impl MessagePayload {
     pub fn len(&self) -> usize {
         match self {
             Self::Version(v) => v.net_encode(Vec::new()),
-            Self::Verack(_) => 0,
+            Self::Verack => 0,
+            Self::SendHeaders => 0,
+            Self::WTxIdRelay => 0
         }
     }
 
@@ -82,8 +85,27 @@ impl MessagePayload {
     pub fn hash(&self) -> [u8; 4] {
         match self {
             Self::Version(v) => v.checksum(),
-            Self::Verack(v) => v.checksum()
+            Self::Verack => EmptyPayload.checksum(),
+            Self::SendHeaders => EmptyPayload.checksum(),
+            Self::WTxIdRelay => EmptyPayload.checksum()
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+/// Abstract structure to represent message payloads that hold nothing
+pub struct EmptyPayload;
+
+impl Checksum for EmptyPayload {
+    fn checksum(&self) -> [u8; 4] {
+        // Sha256d of nothing precomputed:
+        [0x5D, 0xF6, 0xE0, 0xE2]
+    }
+}
+
+impl Default for EmptyPayload {
+    fn default() -> Self {
+        Self
     }
 }
 
@@ -98,4 +120,3 @@ macro_rules! payload_from_struct {
 }
 
 payload_from_struct!(VersionMessage, Version);
-payload_from_struct!(VerackMessage, Verack);

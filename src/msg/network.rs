@@ -239,27 +239,3 @@ impl PartialEq for VersionMessage {
         self.relay == other.relay
     }
 }
-
-#[derive(Debug, Clone)]
-/// Verack message struct.
-//  The verack message has no payload, it consists only of the header with the command string.
-pub struct VerackMessage();
-
-impl VerackMessage {
-    pub fn new() -> VerackMessage {
-        VerackMessage()
-    }
-}
-
-impl Default for VerackMessage {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Checksum for VerackMessage {
-    fn checksum(&self) -> [u8; 4] {
-        // Sha256d of nothing precomputed:
-        [0x5D, 0xF6, 0xE0, 0xE2]
-    }
-}

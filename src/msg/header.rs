@@ -62,12 +62,18 @@ impl From<[u8; 4]> for Magic {
 }
 
 
-/// Network command enum
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
+/// Network command enum
+//  Adding a new command requires:
+//     - A new entry in the payload enum (Or reuse the same payload for a different command)
+//     - Associated match statements modified to support the new command/payload.
 pub enum Command {
     Version,
-    Verack
+    Verack,
+    SendHeaders,
+    WTxIdRelay
     //More to come...
 }
 
@@ -75,7 +81,9 @@ impl Command {
     pub fn to_str(&self) -> &str {
         match self {
             Self::Version => "version",
-            Self::Verack =>  "verack"
+            Self::Verack =>  "verack",
+            Self::SendHeaders => "sendheaders",
+            Self::WTxIdRelay => "wtxidrelay"
         }
     }
 
@@ -83,16 +91,20 @@ impl Command {
         match &cmd[..] {
             "version" => Ok(Self::Version),
             "verack" => Ok(Self::Verack),
+            "sendheaders" => Ok(Self::SendHeaders),
+            "wtxidrelay" => Ok(Self::WTxIdRelay),
             _ => Err(Error::InvalidData)
         }
     }
 }
 
-impl From<&MessagePayload> for Command {
-    fn from(payload: &MessagePayload) -> Self {
+impl From<MessagePayload> for Command {
+    fn from(payload: MessagePayload) -> Self {
         match payload {
             MessagePayload::Version(_) => Command::Version,
-            MessagePayload::Verack(_) => Command::Verack
+            MessagePayload::Verack => Command::Verack,
+            MessagePayload::SendHeaders => Command::SendHeaders,
+            MessagePayload::WTxIdRelay => Command::WTxIdRelay
         }
     }
 }

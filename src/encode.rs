@@ -10,7 +10,8 @@ use crate::{
     msg::{
         data::{
             Message,
-            MessagePayload
+            MessagePayload,
+            EmptyPayload
         },
         header::{
             VariableInteger,
@@ -22,7 +23,6 @@ use crate::{
             NetAddr,
             ServicesList,
             VersionMessage,
-            VerackMessage,
             Service,
             SERVICE_BITS
         }
@@ -247,6 +247,13 @@ impl Decode for Command {
     where R: std::io::Read {
         let mut buf = [0; 12];
         r.read(&mut buf).expect("Failed to read");
+        println!("Command: {}", 
+            buf
+                .iter()
+                .take_while(|x| **x != 0x00)
+                .map(|c| *c as char)
+                .collect::<String>()
+        );
 
         Self::from_str(
         buf
@@ -297,10 +304,11 @@ impl Decode for Message {
 
         // Message payload doesn't implement the [`Decode`] trait on it's own as
         // it cannot be decoded without knowledge of the command used in the header.
-        // This is becase each command has a different payload structure.
         let payload: MessagePayload = match header.command {
             Command::Version => MessagePayload::from(VersionMessage::net_decode(&mut r)?),
-            Command::Verack => MessagePayload::from(VerackMessage::net_decode(&mut r)?)
+            Command::Verack =>  MessagePayload::Verack,
+            Command::SendHeaders => MessagePayload::SendHeaders,
+            Command::WTxIdRelay => MessagePayload::WTxIdRelay
         };
         
         Ok(
@@ -317,7 +325,9 @@ impl Encode for MessagePayload {
     where W: std::io::Write {
         match self {
             MessagePayload::Version(v) => v.net_encode(w),
-            MessagePayload::Verack(v) => v.net_encode(w)
+            MessagePayload::Verack =>  EmptyPayload.net_encode(w),
+            MessagePayload::SendHeaders => EmptyPayload.net_encode(w),
+            MessagePayload::WTxIdRelay => EmptyPayload.net_encode(w)
         }
     }
 }
@@ -507,14 +517,14 @@ impl Decode for VersionMessage {
     }
 }
 
-impl Encode for VerackMessage {
+impl Encode for EmptyPayload {
     fn net_encode<W>(&self, _w: W) -> usize
     where W: std::io::Write {
         0
     }
 }
 
-impl Decode for VerackMessage {
+impl Decode for EmptyPayload {
     fn net_decode<R>(_r: R) -> Result<Self, Error>
     where R: std::io::Read {
         Ok(Self::default())

@@ -11,6 +11,7 @@
 //  Immediate todos:
 //  - TCP Streams. Multithreaded?
 //  - Implement other common network messages (ie. sendheader, wtxidrelay, ...)
+//  - Remove MessagePayload enum options that don't hold a value and replace with `EmptyPayload`.
 
 
 // Modules
@@ -19,17 +20,15 @@ mod net;
 mod msg;
 mod encode;
 
-
-pub use rand::Rng;
+use std::io::Write;
 use net::{
     peer::*,
     stream::stream_from
 };
-use encode::Encode;
+use encode::{Encode, Decode};
 use msg::{
     network::{
-        VersionMessage,
-        VerackMessage
+        VersionMessage
     },
     header::{
         Magic,
@@ -41,15 +40,6 @@ use msg::{
     }
 };
 
-use std::{
-    io::{
-        Write,
-        Read
-    }
-};
-
-use crate::{encode::Decode, net::stream};
-
 
 fn main() {
     // Program is not yet fully functional.
@@ -57,7 +47,7 @@ fn main() {
     //  - Detect and record working peers
     //  - Create "version" and "verack" messages
     //  - Open a TCP stream with working peers
-    //  - Send "version" message to a peer and read the reply as a hex dump
+    //  - Send "version" and "verack" message to a peer and decode the reply if it is a known command
     // 
     // Below shows examples of working aspects of the program:
 
@@ -70,51 +60,48 @@ fn main() {
     // Create version message using the first available peer...
     let version_message = VersionMessage::from(&peers[0]);
     let payload = MessagePayload::from(version_message);
-    let command = Command::from(&payload);
+    let command = Command::from(payload.clone());
     let msg: Message = Message::new(payload, Magic::Main, command);
     let mut first_message: Vec<u8> = Vec::new();
     msg.net_encode(&mut first_message);
 
 
     // Create a Verack message
-    let payload = MessagePayload::from(VerackMessage::new());
-    let command = Command::from(&payload);
+    let payload = MessagePayload::Verack;
+    let command = Command::from(payload.clone());
     let msg = Message::new(payload, Magic::Main, command);
     let mut second_message: Vec<u8> = Vec::new();
     msg.net_encode(&mut second_message);
 
-    // Open a TCP stream with the first peer
-    if let Ok(mut stream) = stream_from(peers[0]) {
-        // Send a version message
-        let _ = stream.write(&first_message);
-        println!("Sent version message");
+    
+    // Open a TCP stream with the first peer and send the version message...
+    let mut stream = stream_from(peers[0]).expect("Failed to create stream");
+    let _ = stream.write(&first_message);
+    println!("Sent version message!");
 
-        let read_stream = stream.try_clone().unwrap();
-        let mut stream_reader = std::io::BufReader::new(read_stream);
-        
-        // Loop and retrieve new messages
-        loop {
-            // Will fail here if an unknown/invalid message is received.
-            // If a bad message is received here, the program will not be able to recover
-            // as the buffer would be distrupted.
-            let reply = Message::net_decode(&mut stream_reader).expect("Failed to decode");
+    // Setup the stream reader with a buffer...
+    let read_stream = stream.try_clone().expect("Failed to clone TCP stream");
+    let mut stream_reader = std::io::BufReader::new(read_stream);
 
-            match reply.payload {
-                MessagePayload::Version(_) => {
-                    println!("Received version message");
-                    let _ = stream.write(&second_message);
-                    println!("Sent verack message");
-                },
-                MessagePayload::Verack(_) => {
-                    println!("Received verack message");
-                    break;
-                }
-            }
+    // Listen for messages and break when a Verack message is received...
+    loop {
+        let reply = Message::net_decode(&mut stream_reader).expect("Failed to decode");
+
+        match reply.payload {
+            MessagePayload::Version(_) => {
+                println!("Received version message");
+                let _ = stream.write(&second_message);
+                println!("Sent verack message");
+            },
+            MessagePayload::Verack => {
+                println!("Received verack message");
+                break;
+            },
+            _ => println!("Received unknown message")
         }
-        let _ = stream.shutdown(std::net::Shutdown::Both);
-    } else {
-        eprintln!("Failed to open connection");
     }
+
+    let _ = stream.shutdown(std::net::Shutdown::Both);
 }
 
 
