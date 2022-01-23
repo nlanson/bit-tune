@@ -60,7 +60,7 @@ impl Message {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Enum that contians the data structures for network messages
 pub enum MessagePayload {
     Version(VersionMessage),

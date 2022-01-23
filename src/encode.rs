@@ -285,6 +285,11 @@ impl Decode for MessageHeader {
 impl Encode for Message {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
+        // If the payload is empty, check that the heder has zero as the length.
+        if self.payload == MessagePayload::EmptyPayload {
+            assert_eq!(self.header.length, 0)
+        }
+        
         self.header.net_encode(&mut w) +
         self.payload.net_encode(&mut w)
     }
