@@ -247,13 +247,6 @@ impl Decode for Command {
     where R: std::io::Read {
         let mut buf = [0; 12];
         r.read(&mut buf).expect("Failed to read");
-        println!("Command: {}", 
-            buf
-                .iter()
-                .take_while(|x| **x != 0x00)
-                .map(|c| *c as char)
-                .collect::<String>()
-        );
 
         Self::from_str(
         buf
@@ -306,14 +299,14 @@ impl Decode for Message {
         // it cannot be decoded without knowledge of the command used in the header.
         let payload: MessagePayload = match header.command {
             Command::Version => MessagePayload::from(VersionMessage::net_decode(&mut r)?),
-            Command::Verack =>  MessagePayload::Verack,
-            Command::SendHeaders => MessagePayload::SendHeaders,
-            Command::WTxIdRelay => MessagePayload::WTxIdRelay
+            Command::Verack => MessagePayload::EmptyPayload,
+            Command::SendHeaders => MessagePayload::EmptyPayload,
+            Command::WTxIdRelay => MessagePayload::EmptyPayload
         };
         
         Ok(
             Message {
-                header: Decode::net_decode(&mut r)?,
+                header,
                 payload
             }
         )
@@ -325,9 +318,7 @@ impl Encode for MessagePayload {
     where W: std::io::Write {
         match self {
             MessagePayload::Version(v) => v.net_encode(w),
-            MessagePayload::Verack =>  EmptyPayload.net_encode(w),
-            MessagePayload::SendHeaders => EmptyPayload.net_encode(w),
-            MessagePayload::WTxIdRelay => EmptyPayload.net_encode(w)
+            MessagePayload::EmptyPayload =>  EmptyPayload.net_encode(w)
         }
     }
 }

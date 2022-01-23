@@ -54,7 +54,7 @@ pub struct Message {
 impl Message {
     pub fn new(payload: MessagePayload, magic: Magic, command: Command) -> Message {
         Self {
-            header: MessageHeader::new(magic, command, payload.len(), payload.hash()),
+            header: MessageHeader::new(magic, command, payload.len(), payload.checksum()),
             payload
         }
     }
@@ -64,9 +64,7 @@ impl Message {
 /// Enum that contians the data structures for network messages
 pub enum MessagePayload {
     Version(VersionMessage),
-    Verack,
-    SendHeaders,
-    WTxIdRelay
+    EmptyPayload
 }
 
 impl MessagePayload {
@@ -75,19 +73,16 @@ impl MessagePayload {
     pub fn len(&self) -> usize {
         match self {
             Self::Version(v) => v.net_encode(Vec::new()),
-            Self::Verack => 0,
-            Self::SendHeaders => 0,
-            Self::WTxIdRelay => 0
+            Self::EmptyPayload => 0
         }
     }
+}
 
-    /// Hash the payload to create the checksum
-    pub fn hash(&self) -> [u8; 4] {
+impl Checksum for MessagePayload {
+    fn checksum(&self) -> [u8; 4] {
         match self {
             Self::Version(v) => v.checksum(),
-            Self::Verack => EmptyPayload.checksum(),
-            Self::SendHeaders => EmptyPayload.checksum(),
-            Self::WTxIdRelay => EmptyPayload.checksum()
+            Self::EmptyPayload => EmptyPayload.checksum()
         }
     }
 }
@@ -109,6 +104,7 @@ impl Default for EmptyPayload {
     }
 }
 
+/// Macro to create a Payload enum from a struct.
 macro_rules! payload_from_struct {
     ($struct: ty, $var: ident) => {
         impl From<$struct> for MessagePayload {

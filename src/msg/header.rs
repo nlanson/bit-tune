@@ -98,17 +98,6 @@ impl Command {
     }
 }
 
-impl From<MessagePayload> for Command {
-    fn from(payload: MessagePayload) -> Self {
-        match payload {
-            MessagePayload::Version(_) => Command::Version,
-            MessagePayload::Verack => Command::Verack,
-            MessagePayload::SendHeaders => Command::SendHeaders,
-            MessagePayload::WTxIdRelay => Command::WTxIdRelay
-        }
-    }
-}
-
 // Variable length integer structure
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariableInteger(pub u64);

@@ -3,15 +3,13 @@
 // Tune into chit-chat between computers of the Bitcoin P2P network 🧘
 //
 //
-// General todos:
-//  - Get simple message creation and transmission working.
-//    The version message will be good for this.
-//  - Decode incoming messages.
+//  Todos:
+//  - TCP Streams. Multithreaded to maintain multiple peers?
+//  - Implement other common network messages
+//  - Fall back from failed message decodes while comsuming the entire message.
+//    This can be done by detecting an unknown command string, then consuming the entire
+//    payload length. This allows for the buffer to continue from the next message.
 //
-//  Immediate todos:
-//  - TCP Streams. Multithreaded?
-//  - Implement other common network messages (ie. sendheader, wtxidrelay, ...)
-//  - Remove MessagePayload enum options that don't hold a value and replace with `EmptyPayload`.
 
 
 // Modules
@@ -48,6 +46,7 @@ fn main() {
     //  - Create "version" and "verack" messages
     //  - Open a TCP stream with working peers
     //  - Send "version" and "verack" message to a peer and decode the reply if it is a known command
+    //    (handshake)
     // 
     // Below shows examples of working aspects of the program:
 
@@ -60,15 +59,15 @@ fn main() {
     // Create version message using the first available peer...
     let version_message = VersionMessage::from(&peers[0]);
     let payload = MessagePayload::from(version_message);
-    let command = Command::from(payload.clone());
+    let command = Command::Version;
     let msg: Message = Message::new(payload, Magic::Main, command);
     let mut first_message: Vec<u8> = Vec::new();
     msg.net_encode(&mut first_message);
 
 
     // Create a Verack message
-    let payload = MessagePayload::Verack;
-    let command = Command::from(payload.clone());
+    let payload = MessagePayload::EmptyPayload;
+    let command = Command::Verack;
     let msg = Message::new(payload, Magic::Main, command);
     let mut second_message: Vec<u8> = Vec::new();
     msg.net_encode(&mut second_message);
@@ -85,19 +84,20 @@ fn main() {
 
     // Listen for messages and break when a Verack message is received...
     loop {
+        // If an unknown message is received, the program will panic here.
         let reply = Message::net_decode(&mut stream_reader).expect("Failed to decode");
-
-        match reply.payload {
-            MessagePayload::Version(_) => {
+        
+        match reply.header.command {
+            Command::Version => {
                 println!("Received version message");
                 let _ = stream.write(&second_message);
                 println!("Sent verack message");
             },
-            MessagePayload::Verack => {
+            Command::Verack => {
                 println!("Received verack message");
                 break;
             },
-            _ => println!("Received unknown message")
+            _ => println!("Received other message")
         }
     }
 
