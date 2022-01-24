@@ -4,11 +4,6 @@
 //
 //
 
-use crate::msg::{
-    data::{
-        MessagePayload
-    }
-};
 use crate::encode::Error;
 use sha2::{
     Sha256, Digest
@@ -73,8 +68,12 @@ pub enum Command {
     Version,
     Verack,
     SendHeaders,
-    WTxIdRelay
+    WTxIdRelay,
     //More to come...
+
+    // Command enum option for unknonwn/invalid command strings
+    Unknown(String)
+    
 }
 
 impl Command {
@@ -83,7 +82,8 @@ impl Command {
             Self::Version => "version",
             Self::Verack =>  "verack",
             Self::SendHeaders => "sendheaders",
-            Self::WTxIdRelay => "wtxidrelay"
+            Self::WTxIdRelay => "wtxidrelay",
+            Self::Unknown(s) => &s
         }
     }
 
@@ -93,7 +93,7 @@ impl Command {
             "verack" => Ok(Self::Verack),
             "sendheaders" => Ok(Self::SendHeaders),
             "wtxidrelay" => Ok(Self::WTxIdRelay),
-            _ => Err(Error::InvalidData)
+            _ => Err(Error::UnknownCommand(cmd))
         }
     }
 }
