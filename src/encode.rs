@@ -45,7 +45,8 @@ pub trait Decode: Sized {
 
 #[derive(Debug)]
 pub enum Error {
-    InvalidData
+    InvalidData,
+    UnknownCommand(String)
 }
 
 /// Macro to encode integers in little endian.
@@ -136,6 +137,13 @@ array_encode!(16);
 array_decode!(4);
 array_decode!(2);
 array_decode!(16);
+
+impl Encode for Vec<u8> {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        w.write(self).expect("Failed to write")
+    }
+}
 
 
 impl Encode for VariableInteger {
@@ -272,7 +280,13 @@ impl Decode for MessageHeader {
     fn net_decode<R>(mut r: R) -> Result<Self, Error>
     where R: std::io::Read {
         let magic = Magic::net_decode(&mut r)?;
-        let command = Command::net_decode(&mut r)?;
+        let command =  match Command::net_decode(&mut r) {
+            Ok(x) => x,
+            Err(err) => match err {
+                Error::UnknownCommand(x) => Command::Unknown(x),
+                x => return Err(x)
+            }
+        };
         let length: u32 = Decode::net_decode(&mut r)?;
         let checksum: [u8; 4] = Decode::net_decode(&mut r)?;
 
@@ -301,12 +315,21 @@ impl Decode for Message {
         let header: MessageHeader = Decode::net_decode(&mut r)?;
 
         // Message payload doesn't implement the [`Decode`] trait on it's own as
-        // it cannot be decoded without knowledge of the command used in the header.
+        // it cannot be decoded without the header context
         let payload: MessagePayload = match header.command {
             Command::Version => MessagePayload::from(VersionMessage::net_decode(&mut r)?),
             Command::Verack => MessagePayload::EmptyPayload,
             Command::SendHeaders => MessagePayload::EmptyPayload,
-            Command::WTxIdRelay => MessagePayload::EmptyPayload
+            Command::WTxIdRelay => MessagePayload::EmptyPayload,
+            
+            // Upon receiving an unknown/invalid command in the header...
+            Command::Unknown(_) => {
+                // Consume the payload and store it as a hex dump
+                let mut buf = vec![0; header.length as usize];
+                r.read_exact(&mut buf).expect("Failed to read");
+
+                MessagePayload::Dump(buf)
+            }
         };
         
         Ok(
@@ -323,7 +346,8 @@ impl Encode for MessagePayload {
     where W: std::io::Write {
         match self {
             MessagePayload::Version(v) => v.net_encode(w),
-            MessagePayload::EmptyPayload =>  EmptyPayload.net_encode(w)
+            MessagePayload::EmptyPayload =>  EmptyPayload.net_encode(w),
+            MessagePayload::Dump(d) => d.net_encode(w)
         }
     }
 }

@@ -6,9 +6,6 @@
 //  Todos:
 //  - TCP Streams. Multithreaded to maintain multiple peers?
 //  - Implement other common network messages
-//  - Fall back from failed message decodes while comsuming the entire message.
-//    This can be done by detecting an unknown command string, then consuming the entire
-//    payload length. This allows for the buffer to continue from the next message.
 //
 
 
@@ -42,11 +39,10 @@ use msg::{
 fn main() {
     // Program is not yet fully functional.
     // Currently the program can:
-    //  - Detect and record working peers
-    //  - Create "version" and "verack" messages
-    //  - Open a TCP stream with working peers
-    //  - Send "version" and "verack" message to a peer and decode the reply if it is a known command
+    //  - Detect and working peers
+    //  - Send "version" and "verack" messages to a peer and decode the reply if it is a known command
     //    (handshake)
+    //  - Listen to a peer indefinitely
     // 
     // Below shows examples of working aspects of the program:
 
@@ -95,13 +91,13 @@ fn main() {
             },
             Command::Verack => {
                 println!("Received verack message");
-                break;
+                //break;
             },
-            _ => println!("Received other message")
+            cmd => println!("Received other message: {}", cmd.to_str())
         }
     }
 
-    let _ = stream.shutdown(std::net::Shutdown::Both);
+    // let _ = stream.shutdown(std::net::Shutdown::Both);
 }
 
 
