@@ -6,7 +6,14 @@
 //  Todos:
 //  - TCP Streams. Multithreaded to maintain multiple peers?
 //  - Implement other common network messages
-//
+//  - Concurrent peer connections:
+//    Pass off individual TCP streams to worker threads and get the main thread to synchronise data
+//    from each peer connection using threadpools, MPSC, Mutex and etc concurrent data structures.
+//    This will enable the program to connect to multiple nodes at once and maintain information in the main
+//    thread (ie addr, inv and tx).
+//  - Event loop for maintaining active peer connections through ping messages.
+//  - Figure out how to receive new unverified TX commands (mempool?)...
+//  - Other cool stuff...
 
 
 // Modules
@@ -43,6 +50,7 @@ fn main() {
     //  - Send "version" and "verack" messages to a peer and decode the reply if it is a known command
     //    (handshake)
     //  - Listen to a peer indefinitely
+    //  - Reply to "ping" messages
     // 
     // Below shows examples of working aspects of the program:
 
@@ -91,8 +99,14 @@ fn main() {
             },
             Command::Verack => {
                 println!("Received verack message");
-                //break;
             },
+            Command::Ping => {
+                println!("Received ping message");
+                let mut pong_msg = Vec::new();
+                Message::new(reply.payload, Magic::Main, Command::Pong).net_encode(&mut pong_msg);
+                let _ = stream.write(&mut pong_msg);
+                println!("Send pong message");
+            }
             cmd => println!("Received other message: {}", cmd.to_str())
         }
     }
