@@ -69,6 +69,8 @@ pub enum Command {
     Verack,
     SendHeaders,
     WTxIdRelay,
+    Ping,
+    Pong,
     //More to come...
 
     // Command enum option for unknonwn/invalid command strings
@@ -83,6 +85,8 @@ impl Command {
             Self::Verack =>  "verack",
             Self::SendHeaders => "sendheaders",
             Self::WTxIdRelay => "wtxidrelay",
+            Self::Ping => "ping",
+            Self::Pong => "pong",
             Self::Unknown(s) => &s
         }
     }
@@ -93,6 +97,8 @@ impl Command {
             "verack" => Ok(Self::Verack),
             "sendheaders" => Ok(Self::SendHeaders),
             "wtxidrelay" => Ok(Self::WTxIdRelay),
+            "ping" => Ok(Self::Ping),
+            "Pong" => Ok(Self::Pong),
             _ => Err(Error::UnknownCommand(cmd))
         }
     }

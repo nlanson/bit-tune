@@ -65,7 +65,7 @@ impl Message {
 /// Enum that contians the data structures for network messages
 pub enum MessagePayload {
     Version(VersionMessage),
-    
+    PingPong(u64),
     // Generic payloads for:
     EmptyPayload,   // Payloads with no data
     Dump(Vec<u8>)   // Unknown structure payloads
@@ -78,6 +78,7 @@ impl MessagePayload {
         match self {
             Self::Version(v) => v.net_encode(Vec::new()),
             Self::EmptyPayload => 0,
+            Self::PingPong(_) => 8,
             Self::Dump(d) => d.net_encode(Vec::new())
         }
     }
@@ -87,9 +88,19 @@ impl Checksum for MessagePayload {
     fn checksum(&self) -> [u8; 4] {
         match self {
             Self::Version(v) => v.checksum(),
+            Self::PingPong(int) => int.checksum(),
             Self::EmptyPayload => EmptyPayload.checksum(),
             Self::Dump(d) => d.checksum()
         }
+    }
+}
+
+impl Checksum for u64 {
+    fn checksum(&self) -> [u8; 4] {
+        let mut buf = [0u8; 4];
+        let sum = sha256d(&self.to_be_bytes());
+        buf.copy_from_slice(&sum[..4]);
+        buf
     }
 }
 

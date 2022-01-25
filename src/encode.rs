@@ -321,7 +321,9 @@ impl Decode for Message {
             Command::Verack => MessagePayload::EmptyPayload,
             Command::SendHeaders => MessagePayload::EmptyPayload,
             Command::WTxIdRelay => MessagePayload::EmptyPayload,
-            
+            Command::Ping => MessagePayload::PingPong(Decode::net_decode(&mut r)?),
+            Command::Pong => MessagePayload::PingPong(Decode::net_decode(&mut r)?),
+
             // Upon receiving an unknown/invalid command in the header...
             Command::Unknown(_) => {
                 // Consume the payload and store it as a hex dump
@@ -346,6 +348,7 @@ impl Encode for MessagePayload {
     where W: std::io::Write {
         match self {
             MessagePayload::Version(v) => v.net_encode(w),
+            MessagePayload::PingPong(int) => int.net_encode(w),
             MessagePayload::EmptyPayload =>  EmptyPayload.net_encode(w),
             MessagePayload::Dump(d) => d.net_encode(w)
         }
