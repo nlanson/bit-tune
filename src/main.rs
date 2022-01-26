@@ -56,7 +56,7 @@ fn main() {
 
     // Connect the minimum number of peers:
     let args = ApplicationArgs::from(std::env::args());
-    let peers = Peer::get(args.min_peers).unwrap();
+    let peers = Peer::get(args.min_peers, &seeds::ipv4bitseeds).unwrap();
     println!("Got {} peers...", peers.len());
 
 

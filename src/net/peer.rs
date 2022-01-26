@@ -3,7 +3,9 @@
 // Module involving networking code.
 //
 
-use crate::seeds::ipv4bitseeds;
+use crate::{
+    msg::network::NetAddr
+};
 use crate::net::Error;
 use rayon::prelude::*;
 use std::net::{
@@ -19,9 +21,9 @@ pub struct Peer {
 
 impl Peer {
     /// Get a list of working peers
-    pub fn get(min: usize) -> Result<Vec<Self>, Error> {
+    pub fn get(min: usize, peerlist: &[[u8; 6]]) -> Result<Vec<Self>, Error> {
         // Get a list of potential peers from the seeds module
-        let mut ut_peers: Vec<UntestedPeer> = ipv4bitseeds
+        let mut ut_peers: Vec<UntestedPeer> = peerlist
             .iter()
             .map(|x| UntestedPeer::from(*x))
             .collect::<Vec<UntestedPeer>>();
@@ -65,6 +67,15 @@ impl Peer {
 
         println!("Failed to connect to {}", peer);
         false
+    }
+}
+
+impl From<NetAddr> for Peer {
+    fn from(netaddr: NetAddr) -> Peer {
+        Peer {
+            addr: netaddr.ip,
+            port: netaddr.port
+        }
     }
 }
 
