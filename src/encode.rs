@@ -139,12 +139,6 @@ array_decode!(4);
 array_decode!(2);
 array_decode!(16);
 
-// impl Encode for Vec<u8> {
-//     fn net_encode<W>(&self, mut w: W) -> usize
-//     where W: std::io::Write {
-//         w.write(self).expect("Failed to write")
-//     }
-// }
 
 /// Encode a vector of elements that implement the Encode trait.
 impl<T: Encode> Encode for Vec<T> {
@@ -187,23 +181,6 @@ impl Encode for VariableInteger {
 
 impl Decode for VariableInteger {
     fn net_decode<R: std::io::Read >(mut r: R) -> Result<Self, Error> {
-        // let mut buf = [0; 10];
-        // let len = r.read(&mut buf).expect("Failed to read");
-
-        // match len {
-        //     1 => {
-        //         Ok(VariableInteger::from(buf[0]))
-        //     },
-        //     _ => {
-        //         Ok(
-        //             VariableInteger::from(
-        //                 u64::net_decode(&buf[1..9]).expect("Failed to decode")
-        //             )
-        //         ) 
-        //     }
-        // }
-        
-        
         // Read the first byte as a length indicator and match it with protocol varint length indicators
         // to set the buffer length of the integer that follows
         let mut len_indic: [u8; 1] = [0; 1];
