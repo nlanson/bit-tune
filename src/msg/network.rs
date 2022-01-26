@@ -230,7 +230,7 @@ impl From<&Peer> for VersionMessage {
             rand::thread_rng().gen_range(0..u64::MAX), 
             String::from("bit-tune-v0.0.1"), 
             0u32,
-            false
+            false // Setting this option to true will get the other node to broadcast transaction regardless of bloom filter status
         )
     }
 }
