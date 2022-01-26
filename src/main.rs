@@ -5,7 +5,7 @@
 //
 //  Todos:
 //  - TCP Streams. Multithreaded to maintain multiple peers?
-//  - Implement other common network messages
+//  - Implement other common network messages (inv, getdata)
 //  - Concurrent peer connections:
 //    Pass off individual TCP streams to worker threads and get the main thread to synchronise data
 //    from each peer connection using threadpools, MPSC, Mutex and etc concurrent data structures.
@@ -105,9 +105,18 @@ fn main() {
                 let mut pong_msg = Vec::new();
                 Message::new(reply.payload, Magic::Main, Command::Pong).net_encode(&mut pong_msg);
                 let _ = stream.write(&mut pong_msg);
-                println!("Send pong message");
+                println!("Sent pong message");
+            },
+            Command::Addr => {
+                let addrs = match reply.payload {
+                    MessagePayload::AddrList(addrs) => addrs,
+                    _ => panic!("Invalid payload for message type 'addr'")
+                };
+                println!("Received addr message containing {} peers", addrs.len());
             }
-            cmd => println!("Received other message: {}", cmd.to_str())
+            cmd => {
+                println!("Received other message: {}", cmd.to_str());
+            }
         }
     }
 

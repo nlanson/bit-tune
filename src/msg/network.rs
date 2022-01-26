@@ -9,14 +9,7 @@ use crate::{
         Peer,
         Port
     },
-    msg::header::{
-        Checksum,
-        sha256d
-    },
-    encode::{
-        Encode,
-        Error
-    }
+    encode::Error
 };
 use std::net::Ipv4Addr;
 use std::collections::HashSet;
@@ -140,6 +133,12 @@ impl Default for NetAddr {
     }
 }
 
+impl From<NetAddrTS> for NetAddr {
+    fn from(stamped: NetAddrTS) -> Self {
+        stamped.netaddr
+    }
+}
+
 impl From<(Ipv4Addr, Port)> for NetAddr {
     fn from(net_info: (Ipv4Addr, Port)) -> NetAddr {
         Self {
@@ -150,6 +149,27 @@ impl From<(Ipv4Addr, Port)> for NetAddr {
     }
 }
 
+impl From<Peer> for NetAddr {
+    fn from(peer: Peer) -> Self {
+        Self::from((peer.addr, peer.port))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+/// NetAddr with a timestamp
+pub struct NetAddrTS {
+    pub timestamp: Duration,
+    pub netaddr: NetAddr
+}
+
+impl NetAddrTS {
+    pub fn new(timestamp: Duration, netaddr: NetAddr) -> Self {
+        Self {
+            timestamp,
+            netaddr
+        }
+    }
+}
 
 #[derive(Debug, Clone, Eq)]
 /// The message payload for version commands.
@@ -188,17 +208,6 @@ impl VersionMessage {
             start_height,
             relay
         }
-    }
-}
-
-impl Checksum for VersionMessage {
-    fn checksum(&self) -> [u8; 4] {
-        let mut ret: [u8; 4] = [0; 4];
-        let mut payload = Vec::new();
-        self.net_encode(&mut payload);
-
-        ret.copy_from_slice(&sha256d(payload)[..4]);
-        ret
     }
 }
 

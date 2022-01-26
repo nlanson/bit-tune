@@ -4,7 +4,7 @@
 //
 //
 
-use crate::encode::Error;
+use crate::encode::{Encode, Error};
 use sha2::{
     Sha256, Digest
 };
@@ -71,6 +71,7 @@ pub enum Command {
     WTxIdRelay,
     Ping,
     Pong,
+    Addr,
     //More to come...
 
     // Command enum option for unknonwn/invalid command strings
@@ -87,6 +88,7 @@ impl Command {
             Self::WTxIdRelay => "wtxidrelay",
             Self::Ping => "ping",
             Self::Pong => "pong",
+            Self::Addr => "addr",
             Self::Unknown(s) => &s
         }
     }
@@ -98,7 +100,8 @@ impl Command {
             "sendheaders" => Ok(Self::SendHeaders),
             "wtxidrelay" => Ok(Self::WTxIdRelay),
             "ping" => Ok(Self::Ping),
-            "Pong" => Ok(Self::Pong),
+            "pong" => Ok(Self::Pong),
+            "addr" => Ok(Self::Addr),
             _ => Err(Error::UnknownCommand(cmd))
         }
     }
@@ -146,4 +149,15 @@ pub fn sha256d<T: AsRef<[u8]>>(data: T) -> [u8; 32] {
     
     ret.copy_from_slice(&o.finalize()[..]);
     ret
+}
+
+impl<T: Encode> Checksum for T {
+    fn checksum(&self) -> [u8; 4] {
+        let mut ret: [u8; 4] = [0; 4];
+        let mut payload = Vec::new();
+        self.net_encode(&mut payload);
+
+        ret.copy_from_slice(&sha256d(payload)[..4]);
+        ret
+    }
 }

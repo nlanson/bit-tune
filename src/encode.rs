@@ -21,6 +21,7 @@ use crate::{
         },
         network::{
             NetAddr,
+            NetAddrTS,
             ServicesList,
             VersionMessage,
             Service,
@@ -138,10 +139,22 @@ array_decode!(4);
 array_decode!(2);
 array_decode!(16);
 
-impl Encode for Vec<u8> {
+// impl Encode for Vec<u8> {
+//     fn net_encode<W>(&self, mut w: W) -> usize
+//     where W: std::io::Write {
+//         w.write(self).expect("Failed to write")
+//     }
+// }
+
+/// Encode a vector of elements that implement the Encode trait.
+impl<T: Encode> Encode for Vec<T> {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
-        w.write(self).expect("Failed to write")
+        let mut size: usize = 0;
+        for elem in self {
+            size += elem.net_encode(&mut w)
+        }
+        size
     }
 }
 
@@ -317,12 +330,21 @@ impl Decode for Message {
         // Message payload doesn't implement the [`Decode`] trait on it's own as
         // it cannot be decoded without the header context
         let payload: MessagePayload = match header.command {
-            Command::Version => MessagePayload::from(VersionMessage::net_decode(&mut r)?),
+            Command::Version => MessagePayload::Version(Decode::net_decode(&mut r)?),
             Command::Verack => MessagePayload::EmptyPayload,
             Command::SendHeaders => MessagePayload::EmptyPayload,
             Command::WTxIdRelay => MessagePayload::EmptyPayload,
             Command::Ping => MessagePayload::PingPong(Decode::net_decode(&mut r)?),
             Command::Pong => MessagePayload::PingPong(Decode::net_decode(&mut r)?),
+            Command::Addr => { 
+                let count: VariableInteger = Decode::net_decode(&mut r)?;
+                assert!(count.inner() <= 100); // Max of 100 addresses
+                let mut addrs: Vec<NetAddrTS> = Vec::new();
+                for _ in 0..count.inner() {
+                    addrs.push(Decode::net_decode(&mut r)?)
+                }
+                MessagePayload::AddrList(addrs)
+             }
 
             // Upon receiving an unknown/invalid command in the header...
             Command::Unknown(_) => {
@@ -344,12 +366,13 @@ impl Decode for Message {
 }
 
 impl Encode for MessagePayload {
-    fn net_encode<W>(&self, w: W) -> usize
+    fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
         match self {
             MessagePayload::Version(v) => v.net_encode(w),
             MessagePayload::PingPong(int) => int.net_encode(w),
             MessagePayload::EmptyPayload =>  EmptyPayload.net_encode(w),
+            MessagePayload::AddrList(addrs) => VariableInteger::from(addrs.len()).net_encode(&mut w) + addrs.net_encode(&mut w),
             MessagePayload::Dump(d) => d.net_encode(w)
         }
     }
@@ -403,8 +426,6 @@ impl Encode for Ipv4Addr {
             .to_ipv6_mapped()
             .octets()
             .net_encode(&mut w)
-
-        //w.write(&self.to_ipv6_mapped().octets()).expect("Failed to write")
     }
 }
 
@@ -478,9 +499,34 @@ impl Decode for NetAddr {
     }
 }
 
+impl Encode for NetAddrTS {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        // Duration for NetAddr with a timestamp is encoded as a 32bit integer
+        (self.timestamp.as_secs() as u32).net_encode(&mut w) +
+        self.netaddr.net_encode(&mut w)
+    }
+}
+
+impl Decode for NetAddrTS {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        // Timestamp in NetAddr is encoded using 32 bits.
+        // So we read the 32 bits and then convert it into a Duration struct.
+        let secs: u32 = Decode::net_decode(&mut r)?;
+        Ok(
+            Self::new(
+                Duration::from_secs(secs as u64),
+                Decode::net_decode(&mut r)?
+            )
+        )
+    }
+}
+
 impl Encode for Duration {
     fn net_encode<W>(&self, w: W) -> usize
     where W: std::io::Write {
+        // Duration is encoded as a 64 bit integer
         self
             .as_secs()
             .net_encode(w)
@@ -490,6 +536,7 @@ impl Encode for Duration {
 impl Decode for Duration {
     fn net_decode<R>(mut r: R) -> Result<Self, Error>
     where R: std::io::Read {
+        // Decode a duration where the duration is encoded as a 64bit integer
         Ok(Duration::from_secs(Decode::net_decode(&mut r)?))
     }
 }
