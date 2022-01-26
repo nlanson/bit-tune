@@ -10,25 +10,23 @@
 //        the TCP packet magic, command bytes, payload length indicator and checksum.
 //      - Magic enum containing magic values for the different compatible networks
 //        (mainnet and testnet)
-//      - Command enum listing the different commands that the program can read. The
-//        program will not be able to constuct certain network messages such as the 
-//        `inv` message as it does not store any blockdata.
+//      - Command enum listing the different commands that the program can read.
 //      - Varint struct to create and parse variable length integers.
 //
 //    Message creation:
-//      - Messages can be created via the `Message::create()` API which will be written to
-//        to take in a `Command` enum value. The program will fail if the selected command is
-//        not a supported command.
-//      - Once the `Message` struct is created, the message will be serialized through a
-//        serialisation trait which will be implemented for the various data structures.
+//      - Messages can be created via the `Message::new()` API which is written to
+//        to take in a `Payload` enum value.
+//      - Once the `Message` struct is created, the message will be encoded through a
+//        encoding trait which will be implemented for the various data structures.
 //
 //    Message propagation:
-//      - Serialized messages will be passed to the net module for TCP stream writing.
+//      - The encoded message can be written into an open TCP stream with a peer.
 //
 //    Message Serialization/Deserialization:
-//      - The trait `Serialise` and `Deserialise` will be implemented for necessary data
+//      - The trait `Encode` and `Decode` will be implemented for necessary data
 //        structures for modular encoding/decoding of network messages.
-//      - Message payloads will not be deserialized for unsupported network messages
+//      - Message payloads will be decoded as byte dumps instead of being interpreted as 
+//        structured data.
 
 use crate::{
     msg::header::{
