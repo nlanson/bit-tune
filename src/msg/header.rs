@@ -72,6 +72,7 @@ pub enum Command {
     Ping,
     Pong,
     Addr,
+    Inv,
     //More to come...
 
     // Command enum option for unknonwn/invalid command strings
@@ -89,6 +90,7 @@ impl Command {
             Self::Ping => "ping",
             Self::Pong => "pong",
             Self::Addr => "addr",
+            Self::Inv => "inv",
             Self::Unknown(s) => &s
         }
     }
@@ -102,36 +104,11 @@ impl Command {
             "ping" => Ok(Self::Ping),
             "pong" => Ok(Self::Pong),
             "addr" => Ok(Self::Addr),
+            "inv" => Ok(Self::Inv),
             _ => Err(Error::UnknownCommand(cmd))
         }
     }
 }
-
-// Variable length integer structure
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VariableInteger(pub u64);
-
-impl VariableInteger {
-    pub fn inner(&self) -> u64 {
-        self.0
-    }
-}
-
-macro_rules! varint_from {
-    ($int: ty) => {
-        impl From<$int> for VariableInteger {
-            fn from(int: $int) -> VariableInteger {
-                VariableInteger(int as u64)
-            }
-        }
-    };
-}
-
-varint_from!(u8);
-varint_from!(u16);
-varint_from!(u32);
-varint_from!(u64);
-varint_from!(usize);
 
 
 pub trait Checksum {

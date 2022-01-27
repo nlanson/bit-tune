@@ -39,6 +39,9 @@ use crate::{
         VersionMessage,
         NetAddrTS
     },
+    msg::inventory::{
+        InvVect
+    },
     encode::Encode
 };
 
@@ -65,6 +68,7 @@ pub enum MessagePayload {
     Version(VersionMessage),
     PingPong(u64),
     AddrList(Vec<NetAddrTS>),
+    InvVect(Vec<InvVect>),
     
     // Generic payloads for:
     EmptyPayload,   // Payloads with no data

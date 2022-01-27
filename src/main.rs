@@ -21,6 +21,7 @@ mod seeds;
 mod net;
 mod msg;
 mod encode;
+mod blockdata;
 
 use std::io::Write;
 use net::{
@@ -56,12 +57,13 @@ fn main() {
 
     // Connect the minimum number of peers:
     let args = ApplicationArgs::from(std::env::args());
-    let peers = Peer::get(args.min_peers, &seeds::ipv4bitseeds).unwrap();
+    let peers = Peer::get(args.min_peers, &seeds::MAIN_SEEDS).unwrap();
     println!("Got {} peers...", peers.len());
 
 
     // Create version message using the first available peer...
-    let version_message = VersionMessage::from(&peers[0]);
+    let mut version_message = VersionMessage::from(&peers[0]);
+    version_message.relay = true;  //Set relay to true to receive unconfirmed tx's...
     let payload = MessagePayload::from(version_message);
     let command = Command::Version;
     let msg: Message = Message::new(payload, Magic::Main, command);
@@ -113,6 +115,18 @@ fn main() {
                     _ => panic!("Invalid payload for message type 'addr'")
                 };
                 println!("Received addr message containing {} peers", addrs.len());
+            },
+            Command::Inv => {
+                let inv = match reply.payload {
+                    MessagePayload::InvVect(vect) => vect,
+                    _ => panic!("Invalid payload for message type 'inv'")
+                };
+
+                println!("Received inv message containing {} items", inv.len());
+                for item in inv {
+                    println!("Object: {:?}", item.dtype);
+                    println!("Hash: {:?}", item.hash);
+                }
             }
             cmd => {
                 println!("Received other message: {}", cmd.to_str());

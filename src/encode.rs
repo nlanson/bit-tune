@@ -14,7 +14,6 @@ use crate::{
             EmptyPayload
         },
         header::{
-            VariableInteger,
             Magic,
             Command,
             MessageHeader
@@ -26,10 +25,17 @@ use crate::{
             VersionMessage,
             Service,
             SERVICE_BITS
+        },
+        inventory::{
+            InvObjectType,
+            InvVect
         }
     },
     net::peer::{
         Port
+    },
+    blockdata::{
+        VariableInteger
     }
 };
 
@@ -134,10 +140,12 @@ macro_rules! array_decode {
 array_encode!(4);
 array_encode!(2);
 array_encode!(16);
+array_encode!(32);
 
 array_decode!(4);
 array_decode!(2);
 array_decode!(16);
+array_decode!(32);
 
 
 /// Encode a vector of elements that implement the Encode trait.
@@ -321,7 +329,16 @@ impl Decode for Message {
                     addrs.push(Decode::net_decode(&mut r)?)
                 }
                 MessagePayload::AddrList(addrs)
-             }
+            },
+            Command::Inv => {
+                let count: VariableInteger = Decode::net_decode(&mut r)?;
+                let mut inv_items: Vec<InvVect> = Vec::new();
+                for _ in 0..count.inner() {
+                    inv_items.push(Decode::net_decode(&mut r)?)
+                }
+
+                MessagePayload::InvVect(inv_items)
+            }
 
             // Upon receiving an unknown/invalid command in the header...
             Command::Unknown(_) => {
@@ -350,6 +367,7 @@ impl Encode for MessagePayload {
             MessagePayload::PingPong(int) => int.net_encode(w),
             MessagePayload::EmptyPayload =>  EmptyPayload.net_encode(w),
             MessagePayload::AddrList(addrs) => VariableInteger::from(addrs.len()).net_encode(&mut w) + addrs.net_encode(&mut w),
+            MessagePayload::InvVect(inv) => VariableInteger::from(inv.len()).net_encode(&mut w) + inv.net_encode(&mut w),
             MessagePayload::Dump(d) => d.net_encode(w)
         }
     }
@@ -575,6 +593,40 @@ impl Decode for EmptyPayload {
     fn net_decode<R>(_r: R) -> Result<Self, Error>
     where R: std::io::Read {
         Ok(Self::default())
+    }
+}
+
+impl Encode for InvObjectType {
+    fn net_encode<W>(&self, w: W) -> usize
+    where W: std::io::Write {
+        self.value().net_encode(w)
+    }
+}
+
+impl Decode for InvObjectType {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        InvObjectType::from_u32(Decode::net_decode(&mut r)?)
+    }
+}
+
+impl Encode for InvVect {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        self.dtype.net_encode(&mut w) +
+        self.hash.net_encode(&mut w)
+    }
+}
+
+impl Decode for InvVect {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        Ok(
+            Self {
+                dtype: Decode::net_decode(&mut r)?,
+                hash: Decode::net_decode(&mut r)?
+            }
+        )
     }
 }
 
