@@ -4,15 +4,23 @@
 //
 //
 //  Todos:
-//  - TCP Streams. Multithreaded to maintain multiple peers?
-//  - Implement other common network messages (inv, getdata)
+//  - Implement other common network messages (getblocks, getheaders, getdata, tx, block, headers)
+//
 //  - Concurrent peer connections:
 //    Pass off individual TCP streams to worker threads and get the main thread to synchronise data
 //    from each peer connection using threadpools, MPSC, Mutex and etc concurrent data structures.
 //    This will enable the program to connect to multiple nodes at once and maintain information in the main
 //    thread (ie addr, inv and tx).
+//    To add, the TCP stream reading code should be modularised into a function and each peer connection should
+//    have a two way communication thread to and from itself and the main thread with events and requests being
+//    sent through.
+//
+//  - Split this crate into two:
+//      > Library for bitcoin network messages.
+//      > Program that uses the above library to listen into the bitcoin network.
+//
 //  - Event loop for maintaining active peer connections through ping messages.
-//  - Figure out how to receive new unverified TX commands (mempool?)...
+//
 //  - Other cool stuff...
 
 
@@ -52,6 +60,7 @@ fn main() {
     //    (handshake)
     //  - Listen to a peer indefinitely
     //  - Reply to "ping" messages
+    //  - Receive and decode inventory messages
     // 
     // Below shows examples of working aspects of the program:
 
@@ -124,8 +133,7 @@ fn main() {
 
                 println!("Received inv message containing {} items", inv.len());
                 for item in inv {
-                    println!("Object: {:?}", item.dtype);
-                    println!("Hash: {:?}", item.hash);
+                    println!("{}", item);
                 }
             }
             cmd => {

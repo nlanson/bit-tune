@@ -27,8 +27,7 @@ use crate::{
             SERVICE_BITS
         },
         inventory::{
-            InvObjectType,
-            InvVect
+            Inventory
         }
     },
     net::peer::{
@@ -332,7 +331,7 @@ impl Decode for Message {
             },
             Command::Inv => {
                 let count: VariableInteger = Decode::net_decode(&mut r)?;
-                let mut inv_items: Vec<InvVect> = Vec::new();
+                let mut inv_items: Vec<Inventory> = Vec::new();
                 for _ in 0..count.inner() {
                     inv_items.push(Decode::net_decode(&mut r)?)
                 }
@@ -596,36 +595,33 @@ impl Decode for EmptyPayload {
     }
 }
 
-impl Encode for InvObjectType {
-    fn net_encode<W>(&self, w: W) -> usize
-    where W: std::io::Write {
-        self.value().net_encode(w)
-    }
-}
 
-impl Decode for InvObjectType {
-    fn net_decode<R>(mut r: R) -> Result<Self, Error>
-    where R: std::io::Read {
-        InvObjectType::from_u32(Decode::net_decode(&mut r)?)
-    }
-}
-
-impl Encode for InvVect {
+impl Encode for Inventory {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
-        self.dtype.net_encode(&mut w) +
-        self.hash.net_encode(&mut w)
+        self.identifier().net_encode(&mut w) +
+        match self {
+            Self::Error => [0; 32],
+            Self::Tx(h) => *h,
+            Self::Block(h) => *h,
+            Self::FilteredBlock(h) => *h,
+            Self::CompactBlock(h) => *h,
+            Self::WitnessTx(h) => *h,
+            Self::WitnessBlock(h) => *h,
+            Self::FilteredWitnessBlock(h) => *h,
+            Self::Unknown{inv_type: _, hash: h} => *h
+        }.net_encode(&mut w)
     }
 }
 
-impl Decode for InvVect {
+impl Decode for Inventory {
     fn net_decode<R>(mut r: R) -> Result<Self, Error>
     where R: std::io::Read {
         Ok(
-            Self {
-                dtype: Decode::net_decode(&mut r)?,
-                hash: Decode::net_decode(&mut r)?
-            }
+            Self::from_id_and_hash(
+                Decode::net_decode(&mut r)?,
+                Decode::net_decode(&mut r)?
+            )
         )
     }
 }
