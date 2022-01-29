@@ -37,9 +37,6 @@ use crate::{
             Inventory
         }
     },
-    net::peer::{
-        Port
-    },
     blockdata::{
         VariableInteger
     },
@@ -402,21 +399,6 @@ impl Decode for String {
                 .map(|x| *x as char)
                 .collect::<String>()
         )
-    }
-}
-
-impl Encode for Port {
-    fn net_encode<W>(&self, w: W) -> usize
-    where W: std::io::Write {
-        self.0.net_encode(w)
-    }
-}
-
-impl Decode for Port {
-    fn net_decode<R>(mut r: R) -> Result<Self, Error>
-    where R: std::io::Read {
-        let port: [u8; 2] = Decode::net_decode(&mut r)?;
-        Ok(Port::from(port))
     }
 }
 
