@@ -25,7 +25,6 @@
 
 
 // Modules
-pub mod depreciated_seeds;
 pub mod msg;
 pub mod encode;
 pub mod blockdata;
