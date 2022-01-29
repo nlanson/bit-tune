@@ -1,5 +1,5 @@
 [package]
-name = "bit-tune"
+name = "btcnetmsg"
 version = "0.1.0"
 edition = "2018"
 

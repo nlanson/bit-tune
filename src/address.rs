@@ -10,6 +10,11 @@ use std::net::{
 pub struct Address(pub SocketAddr);
 
 impl Address {
+    /// Create a new instance of self from an IP and port
+    pub fn new(ip: IpAddr, port: u16) -> Self {
+        Self(SocketAddr::new(ip, port))
+    }
+
     /// Get the local IP representation of this machine
     pub fn me() -> Self {
         Address(
