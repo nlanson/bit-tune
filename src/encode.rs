@@ -3,7 +3,12 @@
 // Module implementing the encoding/decoding of encodable structures
 //
 
-use std::net::Ipv4Addr;
+use std::net::{
+    IpAddr,
+    Ipv4Addr,
+    Ipv6Addr,
+    SocketAddr
+};
 use std::time::Duration;
 
 use crate::{
@@ -19,12 +24,14 @@ use crate::{
             MessageHeader
         },
         network::{
-            NetAddr,
-            NetAddrTS,
+            //NetAddr,
+            //NetAddrTS,
             ServicesList,
             VersionMessage,
             Service,
-            SERVICE_BITS
+            SERVICE_BITS,
+            NetAddress,
+            TimestampedNetAddress
         },
         inventory::{
             Inventory
@@ -35,7 +42,8 @@ use crate::{
     },
     blockdata::{
         VariableInteger
-    }
+    },
+    address::Address
 };
 
 /// Trait to encode self into a format acceptable by the Bitcoin P2P network.
@@ -323,7 +331,7 @@ impl Decode for Message {
             Command::Addr => { 
                 let count: VariableInteger = Decode::net_decode(&mut r)?;
                 assert!(count.inner() <= 100); // Max of 100 addresses
-                let mut addrs: Vec<NetAddrTS> = Vec::new();
+                let mut addrs: Vec<TimestampedNetAddress> = Vec::new();
                 for _ in 0..count.inner() {
                     addrs.push(Decode::net_decode(&mut r)?)
                 }
@@ -412,13 +420,67 @@ impl Decode for Port {
     }
 }
 
+impl Encode for Address {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        self.0.net_encode(&mut w)
+    }
+}
+
+impl Decode for Address {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        Ok(Self(Decode::net_decode(&mut r)?))
+    }
+}
+
+impl Encode for SocketAddr {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        self.ip().net_encode(&mut w) +
+        self.port().to_be_bytes().net_encode(&mut w)
+    }
+}
+
+impl Decode for SocketAddr {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        let ip = Decode::net_decode(&mut r)?;
+        let portb: [u8; 2] = Decode::net_decode(&mut r)?;
+        Ok(SocketAddr::new(ip, portb[0] as u16 >> 8 | portb[1] as u16))
+    }
+}
+
+impl Encode for IpAddr {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        match self {
+            Self::V4(ip) => ip.net_encode(&mut w),
+            Self::V6(ip) => ip.net_encode(&mut w)
+        }
+    }
+}
+
+impl Decode for IpAddr {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        // Decode as ipv6...
+        let ipv6: Ipv6Addr = Decode::net_decode(&mut r)?;
+
+        // attempt to convert to v4...
+        match ipv6.to_ipv4() {
+            Some(ipv4) => Ok(IpAddr::V4(ipv4)),
+            None => Ok(IpAddr::V6(ipv6))
+        }
+    }
+}
+
 impl Encode for Ipv4Addr {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
         // Ipv4 addresses are encoded as an Ipv4 mapped Ipv6 address.
         self
             .to_ipv6_mapped()
-            .octets()
             .net_encode(&mut w)
     }
 }
@@ -431,6 +493,23 @@ impl Decode for Ipv4Addr {
         let ipv6b: [u8; 16] = Decode::net_decode(&mut r)?;
         ipv4b.copy_from_slice(&ipv6b[ipv6b.len()-4..]);
         Ok(Ipv4Addr::from(ipv4b))
+    }
+}
+
+impl Encode for Ipv6Addr {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        self
+            .octets()
+            .net_encode(&mut w)
+    }
+}
+
+impl Decode for Ipv6Addr {
+    fn net_decode<R>(mut r: R) -> Result<Self, Error>
+    where R: std::io::Read {
+        let bytes: [u8; 16] = Decode::net_decode(&mut r)?;
+        Ok(Ipv6Addr::from(bytes))
     }
 }
 
@@ -475,38 +554,38 @@ impl Decode for ServicesList {
     }
 }
 
-impl Encode for NetAddr {
+impl Encode for NetAddress {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
-        self.service.net_encode(&mut w) +
-        self.ip.net_encode(&mut w) +
-        self.port.net_encode(&mut w)
+        self.services.net_encode(&mut w) +
+        self.address.net_encode(&mut w)
     }
 }
 
-impl Decode for NetAddr {
+impl Decode for NetAddress {
     fn net_decode<R>(mut r: R) -> Result<Self, Error>
     where R: std::io::Read {
         Ok(
-            Self::new(ServicesList::net_decode(&mut r)?, Decode::net_decode(&mut r)?, Decode::net_decode(&mut r)?)
+            Self::new(
+                Decode::net_decode(&mut r)?,
+                Decode::net_decode(&mut r)?
+            )
         )
     }
 }
 
-impl Encode for NetAddrTS {
+impl Encode for TimestampedNetAddress {
     fn net_encode<W>(&self, mut w: W) -> usize
     where W: std::io::Write {
-        // Duration for NetAddr with a timestamp is encoded as a 32bit integer
+        // Timestamp in netaddr is encoded as a 32bit int
         (self.timestamp.as_secs() as u32).net_encode(&mut w) +
-        self.netaddr.net_encode(&mut w)
+        self.netaddress.net_encode(&mut w)
     }
 }
 
-impl Decode for NetAddrTS {
+impl Decode for TimestampedNetAddress {
     fn net_decode<R>(mut r: R) -> Result<Self, Error>
     where R: std::io::Read {
-        // Timestamp in NetAddr is encoded using 32 bits.
-        // So we read the 32 bits and then convert it into a Duration struct.
         let secs: u32 = Decode::net_decode(&mut r)?;
         Ok(
             Self::new(
@@ -556,8 +635,8 @@ impl Decode for VersionMessage {
         let version: u32 = Decode::net_decode(&mut r)?;
         let services: ServicesList = Decode::net_decode(&mut r)?;
         let timestamp: Duration = Decode::net_decode(&mut r)?;
-        let addr_recv: NetAddr = Decode::net_decode(&mut r)?;
-        let addr_from: NetAddr = Decode::net_decode(&mut r)?;
+        let addr_recv: NetAddress = Decode::net_decode(&mut r)?;
+        let addr_from: NetAddress = Decode::net_decode(&mut r)?;
         let nonce: u64 = Decode::net_decode(&mut r)?;
         let agent: String = Decode::net_decode(&mut r)?;
         let start_height: u32 = Decode::net_decode(&mut r)?;
@@ -706,8 +785,8 @@ mod tests {
 
     #[test]
     fn version_encode_decode() {
-        let peer = crate::net::peer::Peer::from([1, 2, 3, 4, 5, 6]);
-        let vm = VersionMessage::from(&peer);
+        let peer = crate::address::Address::me();
+        let vm = VersionMessage::from(peer);
         let mut enc = Vec::new();
         vm.net_encode(&mut enc);
         let dec: VersionMessage = Decode::net_decode(&enc[..]).expect("Failed to decode");

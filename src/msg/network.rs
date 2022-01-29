@@ -5,13 +5,9 @@
 //
 
 use crate::{
-    net::peer::{
-        Peer,
-        Port
-    },
-    encode::Error
+    encode::Error,
+    address::Address
 };
-use std::net::Ipv4Addr;
 use std::collections::HashSet;
 use std::time::{
     SystemTime,
@@ -98,87 +94,14 @@ impl Default for ServicesList {
     }
 }
 
-
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-/// When a network address is needed somewhere, this structure is used.
-/// When not used in the version message, a time stamp is needed. (unimplented)
-pub struct NetAddr {
-    pub service: ServicesList,
-    pub ip: Ipv4Addr,
-    pub port: Port,
-}
-
-impl NetAddr {
-    pub fn new(
-        service: ServicesList,
-        ip: Ipv4Addr,
-        port: Port
-    ) -> Self {
-        Self {
-            service,
-            ip: ip,
-            port: port
-        }
-    }
-}
-
-impl Default for NetAddr {
-    fn default() -> NetAddr {
-        Self {
-            service: ServicesList::default(),
-            ip: Ipv4Addr::new(0, 0, 0, 0),
-            port: Port::from(0)
-        }
-    }
-}
-
-impl From<NetAddrTS> for NetAddr {
-    fn from(stamped: NetAddrTS) -> Self {
-        stamped.netaddr
-    }
-}
-
-impl From<(Ipv4Addr, Port)> for NetAddr {
-    fn from(net_info: (Ipv4Addr, Port)) -> NetAddr {
-        Self {
-            service: ServicesList::new(),
-            ip: net_info.0,
-            port: net_info.1
-        }
-    }
-}
-
-impl From<Peer> for NetAddr {
-    fn from(peer: Peer) -> Self {
-        Self::from((peer.addr, peer.port))
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-/// NetAddr with a timestamp
-pub struct NetAddrTS {
-    pub timestamp: Duration,
-    pub netaddr: NetAddr
-}
-
-impl NetAddrTS {
-    pub fn new(timestamp: Duration, netaddr: NetAddr) -> Self {
-        Self {
-            timestamp,
-            netaddr
-        }
-    }
-}
-
 #[derive(Debug, Clone, Eq)]
 /// The message payload for version commands.
 pub struct VersionMessage {
     pub version: u32,
     pub service: ServicesList,
     pub timestamp: Duration,
-    pub addr_recv: NetAddr,
-    pub addr_from: NetAddr,
+    pub addr_recv: NetAddress,
+    pub addr_from: NetAddress,
     pub nonce: u64,
     pub agent: String,
     pub start_height: u32,
@@ -190,8 +113,8 @@ impl VersionMessage {
         version: u32,
         service: ServicesList,
         timestamp: Duration,
-        addr_recv: NetAddr,
-        addr_from: NetAddr,
+        addr_recv: NetAddress,
+        addr_from: NetAddress,
         nonce: u64,
         agent: String,
         start_height: u32,
@@ -211,7 +134,7 @@ impl VersionMessage {
     }
 }
 
-impl From<&Peer> for VersionMessage {
+impl From<Address> for VersionMessage {
     /// Create a default VersionMessage struct from a peer with:
     /// * Protocol version 70016 (line 12: https://github.com/bitcoin/bitcoin/blob/master/src/version.h)
     /// * No service flags
@@ -220,13 +143,13 @@ impl From<&Peer> for VersionMessage {
     /// * Random nonce capped at u64 ceiling
     /// * Agent "bit-tune-v0.0.1"
     /// * Relay flag set to false
-    fn from(peer: &Peer) -> Self {
+    fn from(address: Address) -> Self {
         VersionMessage::new(
             70015, 
             ServicesList::default(), 
             SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("Failed to get time"), 
-            NetAddr::new(ServicesList::default(), peer.addr, peer.port),
-            NetAddr::default(),
+            NetAddress::new(ServicesList::default(), address),
+            NetAddress::default(),
             rand::thread_rng().gen_range(0..u64::MAX), 
             String::from("bit-tune-v0.0.1"), 
             0u32,
@@ -246,5 +169,52 @@ impl PartialEq for VersionMessage {
         self.agent == other.agent &&
         self.start_height == other.start_height &&
         self.relay == other.relay
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+/// Data structure to pass around network addresses and related meta data in the bitcoin network
+pub struct NetAddress {
+    pub services: ServicesList,
+    pub address: Address
+}
+
+impl NetAddress {
+    pub fn new(services: ServicesList, address: Address) -> Self {
+        Self {
+            services,
+            address
+        }
+    }
+}
+
+impl Default for NetAddress {
+    fn default() -> Self {
+        Self {
+            services: ServicesList::default(),
+            address: Address::me()
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+/// NetAddress structure with a timestamp.
+pub struct TimestampedNetAddress {
+    pub timestamp: Duration,
+    pub netaddress: NetAddress
+}
+
+impl TimestampedNetAddress {
+    pub fn new(timestamp: Duration, netaddress: NetAddress) -> Self {
+        Self {
+            timestamp,
+            netaddress
+        }
+    }
+}
+
+impl From<TimestampedNetAddress> for NetAddress {
+    fn from(tsna: TimestampedNetAddress) -> Self {
+        tsna.netaddress
     }
 }

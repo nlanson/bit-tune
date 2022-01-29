@@ -37,7 +37,7 @@ use crate::{
     },
     msg::network::{
         VersionMessage,
-        NetAddrTS
+        TimestampedNetAddress
     },
     msg::inventory::{
         Inventory
@@ -67,7 +67,7 @@ impl Message {
 pub enum MessagePayload {
     Version(VersionMessage),
     PingPong(u64),
-    AddrList(Vec<NetAddrTS>),
+    AddrList(Vec<TimestampedNetAddress>),
     InvVect(Vec<Inventory>),
     
     // Generic payloads for:

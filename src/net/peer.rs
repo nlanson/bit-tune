@@ -4,7 +4,7 @@
 //
 
 use crate::{
-    msg::network::NetAddr
+    msg::network::NetAddress
 };
 use crate::net::Error;
 use rayon::prelude::*;
@@ -70,11 +70,14 @@ impl Peer {
     }
 }
 
-impl From<NetAddr> for Peer {
-    fn from(netaddr: NetAddr) -> Peer {
+impl From<NetAddress> for Peer {
+    fn from(netaddr: NetAddress) -> Peer {
         Peer {
-            addr: netaddr.ip,
-            port: netaddr.port
+            addr: match netaddr.address.ip() {
+                std::net::IpAddr::V4(x) => x,
+                std::net::IpAddr::V6(_) => panic!("Peer struct does not support IPv6")
+            },
+            port: Port::from(netaddr.address.port())
         }
     }
 }

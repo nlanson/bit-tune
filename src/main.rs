@@ -30,8 +30,13 @@ mod net;
 mod msg;
 mod encode;
 mod blockdata;
+mod address;
 
 use std::io::Write;
+use std::net::{
+    SocketAddr,
+    IpAddr
+};
 use net::{
     peer::*,
     stream::stream_from
@@ -50,7 +55,7 @@ use msg::{
         MessagePayload
     }
 };
-
+use address::Address;
 
 fn main() {
     // Program is not yet fully functional.
@@ -71,7 +76,10 @@ fn main() {
 
 
     // Create version message using the first available peer...
-    let mut version_message = VersionMessage::from(&peers[0]);
+    let address = Address(
+        SocketAddr::new(IpAddr::V4(peers[0].addr), peers[0].port.to_u16())
+    );
+    let mut version_message = VersionMessage::from(address);
     version_message.relay = true;  //Set relay to true to receive unconfirmed tx's...
     let payload = MessagePayload::from(version_message);
     let command = Command::Version;
