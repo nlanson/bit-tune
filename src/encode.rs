@@ -24,8 +24,6 @@ use crate::{
             MessageHeader
         },
         network::{
-            //NetAddr,
-            //NetAddrTS,
             ServicesList,
             VersionMessage,
             Service,
@@ -43,6 +41,17 @@ use crate::{
     address::Address
 };
 
+use crate::bitcoin::{
+    hash_types::{
+        Txid,
+        BlockHash
+    },
+    consensus::{
+        Encodable,
+        Decodable
+    }
+};
+
 /// Trait to encode self into a format acceptable by the Bitcoin P2P network.
 pub trait Encode {
     fn net_encode<W>(&self, w: W) -> usize
@@ -50,13 +59,15 @@ pub trait Encode {
 }
 
 pub trait Decode: Sized {
-    fn net_decode<R>(r: R) -> Result<Self, Error> 
+    fn net_decode<R>(r: R) -> Result<Self, Error>
     where R: std::io::Read;
 }
 
 #[derive(Debug)]
 pub enum Error {
     InvalidData,
+    BadNetworkMagic(Magic),
+    Io(std::io::Error),
     UnknownCommand(String)
 }
 
@@ -76,7 +87,7 @@ macro_rules! integer_le_encode {
 macro_rules! integer_le_decode {
     ($int: ty) => {
         impl Decode for $int {
-            fn net_decode<R>(mut r: R) -> Result<$int, Error>
+            fn net_decode<R>(mut r: R) -> Result<Self, Error>
             where
                 R: std::io::Read ,
                 Self: Sized
@@ -235,8 +246,9 @@ impl Decode for Magic {
         r.read(&mut buf).expect("Failed to read");
         buf.reverse();
 
+        // If the network magic is not known, return an error.
         match Magic::from(buf) {
-            Magic::Unknown => return Err(Error::InvalidData),
+            Magic::Unknown(v) => return Err(Error::BadNetworkMagic(Magic::Unknown(v))),
             x => Ok(x)
         }
     }
@@ -663,13 +675,13 @@ impl Encode for Inventory {
         self.identifier().net_encode(&mut w) +
         match self {
             Self::Error => [0; 32],
-            Self::Tx(h) => *h,
-            Self::Block(h) => *h,
-            Self::FilteredBlock(h) => *h,
-            Self::CompactBlock(h) => *h,
-            Self::WitnessTx(h) => *h,
-            Self::WitnessBlock(h) => *h,
-            Self::FilteredWitnessBlock(h) => *h,
+            Self::Tx(_) => self.inner(),
+            Self::Block(_) => self.inner(),
+            Self::FilteredBlock(_) => self.inner(),
+            Self::CompactBlock(_) => self.inner(),
+            Self::WitnessTx(_) => self.inner(),
+            Self::WitnessBlock(_) => self.inner(),
+            Self::FilteredWitnessBlock(_) => self.inner(),
             Self::Unknown{inv_type: _, hash: h} => *h
         }.net_encode(&mut w)
     }
@@ -686,6 +698,44 @@ impl Decode for Inventory {
         )
     }
 }
+
+// Macro to implement hashing for the imported hash types from rust-bitcoin
+macro_rules! bitcoin_hash_encode {
+    ($hash: ty) => {
+        impl Encode for $hash {
+            fn net_encode<W>(&self, mut w: W) -> usize
+            where W: std::io::Write {
+                self.consensus_encode(&mut w).expect("Failed to write")
+            }
+        }
+
+        impl Decode for $hash {
+            fn net_decode<R>(mut r: R) -> Result<Self, Error>
+            where R: std::io::Read {
+                Ok(Self::consensus_decode(&mut r)?)
+            }
+        }
+    };
+}
+
+// Conversion of encode::Error to Error
+impl From<crate::bitcoin::consensus::encode::Error> for Error {
+    fn from(err: crate::bitcoin::consensus::encode::Error) -> Error {
+        match err {
+            crate::bitcoin::consensus::encode::Error::Io(x) => Error::Io(x),
+            _ => Error::InvalidData
+        }
+    }
+}
+
+// Implement encoding for Txid and Blockhashes imported from rust-bitcoin
+bitcoin_hash_encode!(Txid);
+bitcoin_hash_encode!(BlockHash);
+
+
+
+
+
 
 
 

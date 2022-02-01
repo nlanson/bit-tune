@@ -34,7 +34,7 @@ impl MessageHeader {
 pub enum Magic {
     Main,
     Test,
-    Unknown
+    Unknown(u32)
 }
 
 impl Magic {
@@ -43,7 +43,7 @@ impl Magic {
         match self {
             Magic::Main => 0xD9B4BEF9,
             Magic::Test => 0xDAB5BFFA,
-            _ =>           0x00000000
+            Magic::Unknown(v)=> *v
         }
     }
 }
@@ -52,7 +52,12 @@ impl From<[u8; 4]> for Magic {
     fn from(bytes: [u8; 4]) -> Self {
         if bytes == Magic::Main.bytes().to_be_bytes() { return Magic::Main }
         else if bytes == Magic::Test.bytes().to_be_bytes() { return Magic::Test }
-        else { return Magic::Unknown }
+        else { return Magic::Unknown(
+            bytes[0] as u32 >> 24 |
+            bytes[1] as u32 >> 16 |
+            bytes[2] as u32 >> 8 |
+            bytes[3] as u32
+        ) }
     }
 }
 

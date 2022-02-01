@@ -4,24 +4,36 @@
 //
 //
 
-use crate::{
-    blockdata::Hash,
-    encode::Error
+pub use crate::bitcoin::{
+    hash_types::{
+        Txid,
+        BlockHash
+    },
+    hashes::Hash
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Inventory {
+    // If an inv value has this flag, ignore it
     Error,
-    Tx(Hash),
-    Block(Hash),
-    FilteredBlock(Hash),
-    CompactBlock(Hash),
-    WitnessTx(Hash),
-    WitnessBlock(Hash),
-    FilteredWitnessBlock(Hash),
+    // Hash of a regular TXID
+    Tx(Txid), 
+    // Hash of a block
+    Block(BlockHash),
+    // Only used in getdata message. Indicates reply should be merkleblock rather than block
+    FilteredBlock(BlockHash),
+    // Only used in getdata message. Indicates reply should be cmpctblock rather than block
+    CompactBlock(BlockHash),
+    // Hash of a TX with witness data
+    WitnessTx(Txid),
+    // Hash of a block with witness data
+    WitnessBlock(BlockHash),
+    // Only used in getdata message. Indicates a reply should be merkleblock rather than block
+    FilteredWitnessBlock(BlockHash),
+    // Unknown hash type
     Unknown {
         inv_type: u32,
-        hash: Hash
+        hash: [u8; 32]
     }
 }
 
@@ -37,21 +49,21 @@ impl Inventory {
             Self::WitnessTx(_) => 0x40000001,
             Self::WitnessBlock(_) => 0x40000002,
             Self::FilteredWitnessBlock(_) => 0x40000003,
-            Self::Unknown{inv_type, hash: _} => *inv_type
+            Self::Unknown{inv_type, ..} => *inv_type
         }
     }
 
     /// Creates self from a u32 identified and hash
-    pub fn from_id_and_hash(identifier: u32, hash: Hash) -> Self {
+    pub fn from_id_and_hash(identifier: u32, hash: [u8; 32]) -> Self {
         match identifier {
             0 => Self::Error,
-            1 => Self::Tx(hash),
-            2 => Self::Block(hash),
-            3 => Self::FilteredBlock(hash),
-            4 => Self::CompactBlock(hash),
-            0x40000001 => Self::WitnessTx(hash),
-            0x40000002 => Self::WitnessBlock(hash),
-            0x40000003 => Self::FilteredWitnessBlock(hash),
+            1 => Self::Tx(Txid::from_inner(hash)),
+            2 => Self::Block(BlockHash::from_inner(hash)),
+            3 => Self::FilteredBlock(BlockHash::from_inner(hash)),
+            4 => Self::CompactBlock(BlockHash::from_inner(hash)),
+            0x40000001 => Self::WitnessTx(Txid::from_inner(hash)),
+            0x40000002 => Self::WitnessBlock(BlockHash::from_inner(hash)),
+            0x40000003 => Self::FilteredWitnessBlock(BlockHash::from_inner(hash)),
             x => Self::Unknown { inv_type: x, hash }
         }
         
@@ -59,16 +71,16 @@ impl Inventory {
 
     /// Return the inner hash stored in Self.
     /// Returns [0; 32] for error variant.
-    pub fn inner(&self) -> Hash {
+    pub fn inner(&self) -> [u8; 32] {
         match self {
             Self::Error => [0; 32],
-            Self::Tx(x) => *x,
-            Self::Block(x) => *x,
-            Self::FilteredBlock(x) => *x,
-            Self::CompactBlock(x) => *x,
-            Self::WitnessTx(x) => *x,
-            Self::WitnessBlock(x) => *x,
-            Self::FilteredWitnessBlock(x) => *x,
+            Self::Tx(x) => x.into_inner(),
+            Self::Block(x) => x.into_inner(),
+            Self::FilteredBlock(x) => x.into_inner(),
+            Self::CompactBlock(x) => x.into_inner(),
+            Self::WitnessTx(x) => x.into_inner(),
+            Self::WitnessBlock(x) => x.into_inner(),
+            Self::FilteredWitnessBlock(x) => x.into_inner(),
             Self::Unknown{inv_type: _, hash} => *hash
         }
     }
@@ -88,6 +100,6 @@ impl std::fmt::Display for Inventory {
             Self::Unknown{inv_type: _, hash: _} => "Unknown"
         };
 
-        write!(f, "Inv({}: {})", obj_type, self.inner().iter().rev().map(|x| format!("{:02x}", x)).collect::<String>())
+        write!(f, "INV: [{}] {}", obj_type, self.inner().iter().rev().map(|x| format!("{:02x}", x)).collect::<String>())
     }
 }
