@@ -346,6 +346,7 @@ impl Decode for Message {
                 }
                 MessagePayload::AddrList(addrs)
             },
+            Command::GetAddr => MessagePayload::EmptyPayload,
             Command::Inv => {
                 let count: VariableInteger = Decode::net_decode(&mut r)?;
                 let mut inv_items: Vec<Inventory> = Vec::new();
@@ -824,5 +825,15 @@ mod tests {
         let dec: VersionMessage = Decode::net_decode(&enc[..]).expect("Failed to decode");
 
         assert_eq!(vm, dec);
+    }
+
+    #[test]
+    fn getaddr_encdec() {
+        let msg = Message::new(MessagePayload::EmptyPayload, Magic::Main, Command::GetAddr);
+        let mut enc = Vec::new();
+        msg.net_encode(&mut enc);
+        let dec: Message = Decode::net_decode(&enc[..]).expect("Failed to decode");
+
+        assert_eq!(msg, dec);
     }
 }

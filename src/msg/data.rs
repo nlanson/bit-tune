@@ -46,7 +46,7 @@ use crate::{
 };
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Network message structure
 pub struct Message {
     pub header: MessageHeader,

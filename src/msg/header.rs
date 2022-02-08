@@ -77,6 +77,7 @@ pub enum Command {
     Ping,
     Pong,
     Addr,
+    GetAddr,
     Inv,
     //More to come...
 
@@ -95,6 +96,7 @@ impl Command {
             Self::Ping => "ping",
             Self::Pong => "pong",
             Self::Addr => "addr",
+            Self::GetAddr => "getaddr",
             Self::Inv => "inv",
             Self::Unknown(s) => &s
         }
@@ -109,6 +111,7 @@ impl Command {
             "ping" => Ok(Self::Ping),
             "pong" => Ok(Self::Pong),
             "addr" => Ok(Self::Addr),
+            "getaddr" => Ok(Self::GetAddr),
             "inv" => Ok(Self::Inv),
             _ => Err(Error::UnknownCommand(cmd))
         }
