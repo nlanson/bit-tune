@@ -38,7 +38,9 @@ use crate::{
     blockdata::{
         VariableInteger
     },
-    address::Address
+    address::Address,
+
+    bitcoin::Transaction
 };
 
 use crate::bitcoin::{
@@ -347,7 +349,9 @@ impl Decode for Message {
                 MessagePayload::AddrList(addrs)
             },
             Command::GetAddr => MessagePayload::EmptyPayload,
-            Command::Inv => {
+            Command::Inv |
+            Command::GetData |
+            Command::NotFound => {
                 let count: VariableInteger = Decode::net_decode(&mut r)?;
                 let mut inv_items: Vec<Inventory> = Vec::new();
                 for _ in 0..count.inner() {
@@ -355,7 +359,8 @@ impl Decode for Message {
                 }
 
                 MessagePayload::InvVect(inv_items)
-            }
+            },
+            Command::Tx => MessagePayload::Transction(Transaction::consensus_decode(&mut r)?),
 
             // Upon receiving an unknown/invalid command in the header...
             Command::Unknown(_) => {
@@ -385,6 +390,7 @@ impl Encode for MessagePayload {
             MessagePayload::EmptyPayload =>  EmptyPayload.net_encode(w),
             MessagePayload::AddrList(addrs) => VariableInteger::from(addrs.len()).net_encode(&mut w) + addrs.net_encode(&mut w),
             MessagePayload::InvVect(inv) => VariableInteger::from(inv.len()).net_encode(&mut w) + inv.net_encode(&mut w),
+            MessagePayload::Transction(tx) => tx.consensus_encode(w).expect("Failed to write"),
             MessagePayload::Dump(d) => d.net_encode(w)
         }
     }

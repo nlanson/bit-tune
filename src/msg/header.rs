@@ -79,6 +79,9 @@ pub enum Command {
     Addr,
     GetAddr,
     Inv,
+    GetData,
+    NotFound,
+    Tx,
     //More to come...
 
     // Command enum option for unknonwn/invalid command strings
@@ -98,6 +101,9 @@ impl Command {
             Self::Addr => "addr",
             Self::GetAddr => "getaddr",
             Self::Inv => "inv",
+            Self::GetData => "getdata",
+            Self::NotFound => "notfound",
+            Self::Tx => "tx",
             Self::Unknown(s) => &s
         }
     }
@@ -113,6 +119,9 @@ impl Command {
             "addr" => Ok(Self::Addr),
             "getaddr" => Ok(Self::GetAddr),
             "inv" => Ok(Self::Inv),
+            "getdata" => Ok(Self::GetData),
+            "notfound" => Ok(Self::NotFound),
+            "tx" => Ok(Self::Tx),
             _ => Err(Error::UnknownCommand(cmd))
         }
     }

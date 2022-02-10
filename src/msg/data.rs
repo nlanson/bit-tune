@@ -42,7 +42,9 @@ use crate::{
     msg::inventory::{
         Inventory
     },
-    encode::Encode
+    encode::Encode,
+
+    bitcoin::Transaction
 };
 
 
@@ -69,6 +71,7 @@ pub enum MessagePayload {
     PingPong(u64),
     AddrList(Vec<TimestampedNetAddress>),
     InvVect(Vec<Inventory>),
+    Transction(Transaction),
     
     // Generic payloads for:
     EmptyPayload,   // Payloads with no data

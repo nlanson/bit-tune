@@ -6,7 +6,8 @@
 
 pub use crate::bitcoin::{
     hash_types::BlockHash,
-    hashes::Hash
+    hashes::Hash,
+    Transaction
 };
 
 // Bitcoin genesis hash
