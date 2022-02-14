@@ -19,3 +19,27 @@ pub mod address;
 
 // Re-exports
 pub use bitcoin as bitcoin;
+pub use msg::{
+    data::{
+        Message,
+        MessagePayload
+    },
+    header::{
+        MessageHeader,
+        Magic,
+        Command
+    },
+
+    network::{
+        VersionMessage,
+        ServicesList,
+        Service
+    },
+    inventory::Inventory
+};
+pub use encode::{
+    Encode,
+    Decode,
+    Error
+};
+pub use address::Address;
