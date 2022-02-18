@@ -4,11 +4,10 @@
 //
 //
 //  Todos:
-//  - Implement other common network messages (getblocks, getheaders, getdata, tx, block, headers)
+//  - Implement other common network messages (getblocks, getheaders, block, headers, etc...)
 //
 //  - Use rust-bitcoin crate for blockdata
-//
-//  - Move bit-tune application code into a new crate
+
 
 
 // Modules

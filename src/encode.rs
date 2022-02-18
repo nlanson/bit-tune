@@ -73,6 +73,15 @@ pub enum Error {
     UnknownCommand(String)
 }
 
+
+/// Utility function to decode a slice into an object without consuming the entire slice.
+/// Returns the decoded object and the position in the slice where the object decode ended.
+pub fn decode_partial<T: Decode>(data: &[u8]) -> Result<(T, usize), Error> {
+    let mut cursor = std::io::Cursor::new(data);
+
+    Ok((Decode::net_decode(&mut cursor)?, cursor.position() as usize))
+}
+
 /// Macro to encode integers in little endian.
 macro_rules! integer_le_encode {
     ($int: ty) => {
