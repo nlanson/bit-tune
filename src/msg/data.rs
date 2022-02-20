@@ -40,7 +40,8 @@ use crate::{
         TimestampedNetAddress
     },
     msg::inventory::{
-        Inventory
+        Inventory,
+        BlockdataLocatorInfo
     },
     encode::Encode,
 
@@ -72,6 +73,7 @@ pub enum MessagePayload {
     AddrList(Vec<TimestampedNetAddress>),
     InvVect(Vec<Inventory>),
     Transction(Transaction),
+    BlockLocator(BlockdataLocatorInfo),
     
     // Generic payloads for:
     EmptyPayload,   // Payloads with no data

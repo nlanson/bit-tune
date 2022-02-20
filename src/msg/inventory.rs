@@ -12,6 +12,8 @@ pub use crate::bitcoin::{
     hashes::Hash
 };
 
+use crate::msg::VariableInteger;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Inventory {
     // If an inv value has this flag, ignore it
@@ -101,5 +103,27 @@ impl std::fmt::Display for Inventory {
         };
 
         write!(f, "INV: [{}] {}", obj_type, self.inner().iter().rev().map(|x| format!("{:02x}", x)).collect::<String>())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// Block locator strucutre used in getblocks and getheaders messages.
+/// Contains a list of known hashes, down to the genesis block.
+pub struct BlockdataLocatorInfo {
+    // Protocol version
+    pub version: u32,
+    // Locator hashes, newest back to the genesis block
+    pub hashes: Vec<crate::blockdata::BlockHash>,
+    // Hash of the last desired block. Set to zero for maximum
+    pub stop: crate::blockdata::BlockHash
+}
+
+impl BlockdataLocatorInfo {
+    pub fn new(version: u32, hashes: Vec<crate::blockdata::BlockHash>, stop: crate::blockdata::BlockHash) -> Self {
+        Self {
+            version,
+            hashes,
+            stop
+        }
     }
 }

@@ -4,9 +4,11 @@
 //
 //
 //  Todos:
-//  - Implement other common network messages (getblocks, getheaders, block, headers, etc...)
+//  - Implement other common network messages (block, headers, etc...)
 //
 //  - Use rust-bitcoin crate for blockdata
+//
+//  - Message structures refactor to enforce payload restrictions based on command type.
 
 
 

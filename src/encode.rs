@@ -32,10 +32,9 @@ use crate::{
             TimestampedNetAddress
         },
         inventory::{
-            Inventory
-        }
-    },
-    blockdata::{
+            Inventory,
+            BlockdataLocatorInfo
+        },
         VariableInteger
     },
     address::Address,
@@ -309,7 +308,7 @@ impl Decode for MessageHeader {
             Ok(x) => x,
             Err(err) => match err {
                 Error::UnknownCommand(x) => Command::Unknown(x),
-                x => return Err(x)
+                x => return Err(x) // Other errors should not arise here
             }
         };
         let length: u32 = Decode::net_decode(&mut r)?;
@@ -340,7 +339,8 @@ impl Decode for Message {
         let header: MessageHeader = Decode::net_decode(&mut r)?;
 
         // Message payload doesn't implement the [`Decode`] trait on it's own as
-        // it cannot be decoded without the header context
+        // it cannot be decoded without the header context.
+        // TODO: Read header.len bytes into a vector and then decode the vector to avoid comsuming more bytes than necessary.
         let payload: MessagePayload = match header.command {
             Command::Version => MessagePayload::Version(Decode::net_decode(&mut r)?),
             Command::Verack => MessagePayload::EmptyPayload,
@@ -370,6 +370,8 @@ impl Decode for Message {
                 MessagePayload::InvVect(inv_items)
             },
             Command::Tx => MessagePayload::Transction(Transaction::consensus_decode(&mut r)?),
+            Command::GetBlocks |
+            Command::GetHeaders => MessagePayload::BlockLocator(Decode::net_decode(&mut r)?),
 
             // Upon receiving an unknown/invalid command in the header...
             Command::Unknown(_) => {
@@ -400,6 +402,7 @@ impl Encode for MessagePayload {
             MessagePayload::AddrList(addrs) => VariableInteger::from(addrs.len()).net_encode(&mut w) + addrs.net_encode(&mut w),
             MessagePayload::InvVect(inv) => VariableInteger::from(inv.len()).net_encode(&mut w) + inv.net_encode(&mut w),
             MessagePayload::Transction(tx) => tx.consensus_encode(w).expect("Failed to write"),
+            MessagePayload::BlockLocator(loc) => loc.net_encode(w),
             MessagePayload::Dump(d) => d.net_encode(w)
         }
     }
@@ -715,6 +718,38 @@ impl Decode for Inventory {
     }
 }
 
+
+impl Encode for BlockdataLocatorInfo {
+    fn net_encode<W>(&self, mut w: W) -> usize
+    where W: std::io::Write {
+        self.version.net_encode(&mut w) +
+        VariableInteger::from(self.hashes.len()).net_encode(&mut w) +
+        self.hashes.iter().fold(0, |len, hash| len + hash.net_encode(&mut w)) +
+        self.stop.net_encode(&mut w)
+    }
+}
+
+impl Decode for BlockdataLocatorInfo {
+    fn net_decode<R: std::io::Read>(mut r: R) -> Result<Self, Error> {
+        let version: u32 = Decode::net_decode(&mut r)?;
+        let count: u64 = VariableInteger::net_decode(&mut r)?.inner();
+        let mut hashes: Vec<BlockHash> = Vec::new();
+        for _ in 0..count+1 {
+            hashes.push(Decode::net_decode(&mut r)?);
+        }
+        let stop = hashes.pop().expect("Stop hash missing.");
+
+        Ok(
+            Self::new(
+                version,
+                hashes,
+                stop
+            )
+        )
+    }
+}
+
+
 // Macro to implement hashing for the imported hash types from rust-bitcoin
 macro_rules! bitcoin_hash_encode {
     ($hash: ty) => {
@@ -759,6 +794,7 @@ bitcoin_hash_encode!(BlockHash);
 mod tests {
     use super::*;
     use crate::msg::network::Service;
+    use bitcoin::hashes::Hash;
 
     #[test]
     fn varint_test() {
@@ -845,6 +881,25 @@ mod tests {
     #[test]
     fn getaddr_encdec() {
         let msg = Message::new(MessagePayload::EmptyPayload, Magic::Main, Command::GetAddr);
+        let mut enc = Vec::new();
+        msg.net_encode(&mut enc);
+        let dec: Message = Decode::net_decode(&enc[..]).expect("Failed to decode");
+
+        assert_eq!(msg, dec);
+    }
+
+    #[test]
+    fn blocklocator_obj_test() {
+        let h1 = BlockHash::from_inner([0; 32]);
+        let h2 = BlockHash::from_inner([1; 32]);
+        let h3 = BlockHash::from_inner([2; 32]);
+        let h4 = BlockHash::from_inner([3; 32]);
+        let h5 = BlockHash::from_inner([4; 32]);
+        let h6 = BlockHash::from_inner([5; 32]);
+
+        let block_locator_obj = BlockdataLocatorInfo::new(70016, vec![h1, h2, h3, h4, h5], h6);
+
+        let msg = Message::new(MessagePayload::BlockLocator(block_locator_obj), Magic::Main, Command::GetHeaders);
         let mut enc = Vec::new();
         msg.net_encode(&mut enc);
         let dec: Message = Decode::net_decode(&enc[..]).expect("Failed to decode");
