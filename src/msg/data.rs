@@ -74,6 +74,8 @@ pub enum MessagePayload {
     InvVect(Vec<Inventory>),
     Transction(Transaction),
     BlockLocator(BlockdataLocatorInfo),
+    Headers(Vec<crate::bitcoin::BlockHeader>),
+    Block(crate::bitcoin::Block),
     
     // Generic payloads for:
     EmptyPayload,   // Payloads with no data

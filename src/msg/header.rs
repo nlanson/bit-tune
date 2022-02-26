@@ -84,6 +84,8 @@ pub enum Command {
     Tx,
     GetBlocks,
     GetHeaders,
+    Block,
+    Headers,
     //More to come...
 
     // Command enum option for unknonwn/invalid command strings
@@ -108,6 +110,8 @@ impl Command {
             Self::Tx => "tx",
             Self::GetBlocks => "getblocks",
             Self::GetHeaders => "getheaders",
+            Self::Block => "block",
+            Self::Headers => "headers",
             Self::Unknown(s) => &s
         }
     }
@@ -128,6 +132,8 @@ impl Command {
             "tx" => Ok(Self::Tx),
             "getblocks" => Ok(Self::GetBlocks),
             "getheaders" => Ok(Self::GetHeaders),
+            "block" => Ok(Self::Block),
+            "headers" => Ok(Self::Headers),
             _ => Err(Error::UnknownCommand(cmd))
         }
     }

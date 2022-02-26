@@ -39,7 +39,11 @@ use crate::{
     },
     address::Address,
 
-    bitcoin::Transaction
+    bitcoin::{
+        Transaction,
+        BlockHeader,
+        Block
+    }
 };
 
 use crate::bitcoin::{
@@ -372,6 +376,15 @@ impl Decode for Message {
             Command::Tx => MessagePayload::Transction(Transaction::consensus_decode(&mut r)?),
             Command::GetBlocks |
             Command::GetHeaders => MessagePayload::BlockLocator(Decode::net_decode(&mut r)?),
+            Command::Headers => {
+                let count = VariableInteger::net_decode(&mut r)?.inner();
+                let mut headers: Vec<BlockHeader> = Vec::new();
+                for _ in 0..count {
+                    headers.push(Decodable::consensus_decode(&mut r)?)
+                }
+                MessagePayload::Headers(headers)
+            },
+            Command::Block => MessagePayload::Block(Decodable::consensus_decode(&mut r)?),
 
             // Upon receiving an unknown/invalid command in the header...
             Command::Unknown(_) => {
@@ -403,10 +416,12 @@ impl Encode for MessagePayload {
             MessagePayload::InvVect(inv) => VariableInteger::from(inv.len()).net_encode(&mut w) + inv.net_encode(&mut w),
             MessagePayload::Transction(tx) => tx.consensus_encode(w).expect("Failed to write"),
             MessagePayload::BlockLocator(loc) => loc.net_encode(w),
+            MessagePayload::Block(block) => block.consensus_encode(w).expect("Failed to write"),
+            MessagePayload::Headers(hdrs) => VariableInteger::from(hdrs.len()).net_encode(&mut w) + hdrs.iter().fold(0, |acc, h| acc + h.consensus_encode(&mut w).expect("Failed to write")),
             MessagePayload::Dump(d) => d.net_encode(w)
         }
     }
-}
+}   
 
 /// Strings are encoded as var string which is the string bytes with a varint prefixed
 impl Encode for String {
@@ -795,6 +810,7 @@ mod tests {
     use super::*;
     use crate::msg::network::Service;
     use bitcoin::hashes::Hash;
+    use bitcoin::TxMerkleNode;
 
     #[test]
     fn varint_test() {
@@ -905,5 +921,43 @@ mod tests {
         let dec: Message = Decode::net_decode(&enc[..]).expect("Failed to decode");
 
         assert_eq!(msg, dec);
+    }
+
+    #[test]
+    fn header_decode_test() {
+        // Test by creating a message with 3 block headers and encoding and decode the message
+        let headers = vec![
+            BlockHeader {
+                version: 1,
+                prev_blockhash: BlockHash::from_slice(&[0; 32]).unwrap(),
+                merkle_root: TxMerkleNode::from_slice(&[0; 32]).unwrap(),
+                time: 1645835601,
+                bits: 0,
+                nonce: 1
+            },
+            BlockHeader {
+                version: 1,
+                prev_blockhash: BlockHash::from_slice(&[1; 32]).unwrap(),
+                merkle_root: TxMerkleNode::from_slice(&[1; 32]).unwrap(),
+                time: 1645836201,
+                bits: 0,
+                nonce: 5
+            },
+            BlockHeader {
+                version: 1,
+                prev_blockhash: BlockHash::from_slice(&[2; 32]).unwrap(),
+                merkle_root: TxMerkleNode::from_slice(&[2; 32]).unwrap(),
+                time: 1645837201,
+                bits: 0,
+                nonce: 900
+            }
+        ];
+
+        let msg = Message::new(MessagePayload::Headers(headers), Magic::Main, Command::Headers);
+        let mut enc = Vec::new();
+        msg.net_encode(&mut enc);
+        let dec: Message = Decode::net_decode(&enc[..]).expect("Failed to decode");
+
+        assert_eq!(msg, dec)
     }
 }
